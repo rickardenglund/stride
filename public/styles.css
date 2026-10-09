@@ -121,6 +121,9 @@ h1 span, .connect-content h2 span { color: var(--blue-2); }
 .chart-title-row { display: flex; align-items: center; gap: 10px; }
 .chart-heading h2 { font: 700 16px Manrope, sans-serif; letter-spacing: -.4px; }
 .chart-heading p { font-size: 12px; color: #39443d; margin-top: 5px; }
+.chart-options { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.chart-selectors { display: flex; align-items: flex-end; gap: 10px; }
+.chart-selectors .range-select select { min-width: 112px; }
 .live-pill { color: var(--blue-1); background: #eaf4ff; border: 1px solid var(--blue-1); border-radius: 10px; padding: 4px 7px; font-size: 10px; font-weight: 700; letter-spacing: .6px; display: inline-flex; align-items: center; gap: 5px; }
 .live-pill span { width: 5px; height: 5px; border-radius: 50%; background: var(--blue-2); }
 .legend { display: flex; gap: 18px; color: var(--muted); font-size: 12px; }
@@ -146,12 +149,24 @@ h1 span, .connect-content h2 span { color: var(--blue-2); }
 .runs-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 13px; }
 .runs-heading h2 { font: 700 16px Manrope, sans-serif; letter-spacing: -.4px; }
 .runs-heading p { color: #39443d; font-size: 12px; margin-top: 5px; }
+.weekday-range-select { flex: 0 0 auto; }
+.weekday-empty { color: var(--muted); text-align: center; }
 .runs-summary { color: #1f2925; font-size: 12px; font-weight: 700; }
 .runs-table-wrap { overflow-x: auto; }
 .runs-table { width: 100%; border-collapse: collapse; text-align: left; }
 .runs-table th { color: #303a34; background: #edf2f7; font-size: 11px; font-weight: 700; padding: 11px 12px; }
 .runs-table td { color: #1f2925; border-bottom: 1px solid #dfe4ea; font-size: 13px; padding: 11px 12px; }
 .runs-table tbody tr:last-child td { border-bottom: 0; }
+.weekday-table { width: 100%; min-width: 600px; border-collapse: separate; border-spacing: 3px; text-align: center; }
+.weekday-table th { color: var(--muted); font-size: 11px; font-weight: 700; padding: 8px 6px; }
+.weekday-table th[scope="row"] { width: 150px; text-align: left; }
+.weekday-activity-name { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.weekday-table td { min-width: 45px; padding: 8px 5px; border-radius: 4px; color: #edf6ff; font-size: 12px; font-variant-numeric: tabular-nums; }
+.weekday-table td.level-0 { background: #142531; color: #91a5b7; }
+.weekday-table td.level-1 { background: #1b3445; }
+.weekday-table td.level-2 { background: #234a62; }
+.weekday-table td.level-3 { background: #2b6685; }
+.weekday-table td.level-4 { background: #368bb0; color: #07141d; font-weight: 700; }
 .run-type { display: inline-block; border-radius: 4px; padding: 4px 7px; font-size: 11px; font-weight: 600; }
 .run-type.activity-running { color: var(--blue-1); background: #dfeef9; }
 .run-type.activity-trail { color: var(--brown); background: #f3e5d9; }
@@ -308,6 +323,8 @@ body { background: var(--paper); color: var(--ink); }
   .runs-card { padding: 16px 12px 12px; }
   .runs-table th, .runs-table td { padding: 10px 8px; white-space: nowrap; }
   .chart-heading { align-items: flex-start; }
+  .chart-options { align-items: flex-start; }
+  .chart-selectors { flex-wrap: wrap; }
   .legend { flex-direction: column; gap: 7px; font-size: 11px; }
   .chart-wrap { min-height: 180px; overflow-x: auto; }
   .chart-wrap svg { min-width: 650px; }
@@ -329,6 +346,10 @@ body { background: var(--paper); color: var(--ink); }
   .stat-grid { grid-template-columns: 1fr 1fr; }
   .stat-card:last-child { display: none; }
   .chart-heading { flex-direction: column; gap: 14px; }
+  .chart-options { width: 100%; }
+  .chart-selectors { width: 100%; gap: 8px; }
+  .chart-selectors .range-select { flex: 1 1 120px; flex-direction: column; align-items: stretch; }
+  .chart-selectors .range-select select { width: 100%; min-width: 0; padding-right: 22px; }
   .legend { flex-direction: row; flex-wrap: wrap; }
   .chart-footer { font-size: 9px; letter-spacing: .2px; }
   .runs-table thead { display: none; }

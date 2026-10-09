@@ -34,15 +34,6 @@
               <h1>A little more <span>in stride.</span></h1>
               <p class="intro-copy">Your running story, one week at a time.</p>
             </div>
-            <label class="range-select">
-              <span>Time period</span>
-              <select id="range-select" aria-label="Chart time period">
-                <option value="30">Last 30 days</option>
-                <option value="90" selected>Last 90 days</option>
-                <option value="180">Last 6 months</option>
-                <option value="365">Last year</option>
-              </select>
-            </label>
             <label class="range-select unit-select">
               <span>CSV distance unit</span>
               <select id="distance-unit" aria-label="Distance unit in CSV">
@@ -54,24 +45,6 @@
         </section>
 
         <section class="dashboard" id="dashboard" hidden>
-          <div class="stat-grid">
-            <article class="stat-card">
-              <div class="stat-label">DISTANCE THIS PERIOD <span class="stat-icon distance-icon">↗</span></div>
-              <div class="stat-value"><span id="total-distance">—</span><span class="stat-unit">km</span></div>
-              <div class="stat-note" id="run-count">Across — runs</div>
-            </article>
-            <article class="stat-card">
-              <div class="stat-label">7-DAY DAILY AVERAGE <span class="stat-icon average-icon">⌁</span></div>
-              <div class="stat-value"><span id="current-average">—</span><span class="stat-unit">km</span></div>
-              <div class="stat-note">Per day · including rest days</div>
-            </article>
-            <article class="stat-card">
-              <div class="stat-label">BEST RUNNING DAY <span class="stat-icon best-icon">✳</span></div>
-              <div class="stat-value"><span id="best-day">—</span><span class="stat-unit">km</span></div>
-              <div class="stat-note" id="best-day-date">Single-day distance</div>
-            </article>
-          </div>
-
           <section class="calendar-card" aria-labelledby="calendar-title">
             <div class="calendar-heading">
               <div>
@@ -100,17 +73,78 @@
             <div class="chart-heading">
               <div>
                 <div class="chart-title-row"><h2>Your weekly rhythm</h2><span class="live-pill"><span></span> GARMIN</span></div>
-                <p>Daily distance and your 7-day rolling average</p>
+                <p>Daily distance with configurable rolling average and total</p>
               </div>
-              <div class="legend" aria-label="Chart legend">
-                <span><i class="legend-bar"></i> Daily distance</span>
-                <span><i class="legend-line"></i> 7-day average</span>
-                <span><i class="legend-total-line"></i> 7-day total</span>
+              <div class="chart-options">
+                <div class="chart-selectors">
+                  <label class="range-select">
+                    <span>Time period</span>
+                    <select id="range-select" aria-label="Chart time period">
+                      <option value="30">Last 30 days</option>
+                      <option value="90" selected>Last 90 days</option>
+                      <option value="180">Last 6 months</option>
+                      <option value="365">Last year</option>
+                    </select>
+                  </label>
+                  <label class="range-select">
+                    <span>Rolling average</span>
+                    <select id="average-period" aria-label="Rolling average length">
+                      <option value="3">3 days</option>
+                      <option value="7" selected>7 days</option>
+                      <option value="14">14 days</option>
+                      <option value="28">28 days</option>
+                    </select>
+                  </label>
+                  <label class="range-select">
+                    <span>Rolling total</span>
+                    <select id="total-period" aria-label="Rolling total length">
+                      <option value="3">3 days</option>
+                      <option value="7" selected>7 days</option>
+                      <option value="14">14 days</option>
+                      <option value="28">28 days</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="legend" aria-label="Chart legend">
+                  <span><i class="legend-bar"></i> Daily distance</span>
+                  <span><i class="legend-line"></i><span id="average-legend-label">7-day average</span></span>
+                  <span><i class="legend-total-line"></i><span id="total-legend-label">7-day total</span></span>
+                </div>
               </div>
             </div>
             <div class="chart-wrap" id="chart" role="img" aria-label="Running distance chart"></div>
             <div class="chart-footer"><span>REST DAYS ARE PART OF THE TRAINING.</span><span id="chart-range"></span></div>
           </article>
+          <section class="runs-card weekday-card" aria-labelledby="weekday-title">
+            <div class="runs-heading">
+              <div>
+                <h2 id="weekday-title">Activity by weekday</h2>
+                <p id="weekday-description">Activity counts grouped by weekday</p>
+              </div>
+              <label class="range-select weekday-range-select">
+                <span>Time period</span>
+                <select id="weekday-period" aria-label="Activity frequency time period">
+                  <option value="30">Last 30 days</option>
+                  <option value="90" selected>Last 90 days</option>
+                  <option value="180">Last 6 months</option>
+                  <option value="365">Last year</option>
+                  <option value="all">All imported</option>
+                </select>
+              </label>
+            </div>
+            <div class="runs-table-wrap">
+              <table class="weekday-table" aria-describedby="weekday-description">
+                <thead>
+                  <tr>
+                    <th scope="col">Activity</th>
+                    <th scope="col">Mon</th><th scope="col">Tue</th><th scope="col">Wed</th>
+                    <th scope="col">Thu</th><th scope="col">Fri</th><th scope="col">Sat</th><th scope="col">Sun</th>
+                  </tr>
+                </thead>
+                <tbody id="weekday-frequency"></tbody>
+              </table>
+            </div>
+          </section>
           <section class="runs-card" aria-labelledby="runs-title">
             <div class="runs-heading">
               <div>

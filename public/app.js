@@ -4,6 +4,8 @@ const dashboard = document.querySelector("#dashboard");
 const connectState = document.querySelector("#connect-state");
 const notice = document.querySelector("#notice");
 const rangeSelect = document.querySelector("#range-select");
+const averagePeriod = document.querySelector("#average-period");
+const totalPeriod = document.querySelector("#total-period");
 const distanceUnit = document.querySelector("#distance-unit");
 const connectionLabel = document.querySelector("#connection-label");
 const statusDot = document.querySelector(".status-dot");
@@ -14,6 +16,8 @@ const calendarPrev = document.querySelector("#calendar-prev");
 const calendarNext = document.querySelector("#calendar-next");
 const runsList = document.querySelector("#runs-list");
 const runsSummary = document.querySelector("#runs-summary");
+const weekdayFrequency = document.querySelector("#weekday-frequency");
+const weekdayPeriod = document.querySelector("#weekday-period");
 const chart = document.querySelector("#chart");
 const importButtons = [document.querySelector("#import-button"), document.querySelector("#import-cta")];
 let importedRuns = [];
@@ -86,7 +90,7 @@ function showError(message) {
   notice.hidden = false;
 }
 
-function makeChart(daily, dates, rollingAverage) {
+function makeChart(daily, dates, rollingAverage, rollingTotals, averageDays, totalDays) {
   const width = Math.max(800, dates.length * 10);
   const height = 260;
   const left = 43;
@@ -95,10 +99,6 @@ function makeChart(daily, dates, rollingAverage) {
   const bottom = 34;
   const plotWidth = width - left - right;
   const plotHeight = height - top - bottom;
-  const rollingTotals = rollingAverage.map((average, index) => {
-    const windowStart = Math.max(0, index - 6);
-    return daily.slice(windowStart, index + 1).reduce((sum, distance) => sum + distance, 0);
-  });
   const maxValue = Math.max(5, ...daily, ...rollingAverage, ...rollingTotals);
   const maxY = Math.ceil(maxValue / 5) * 5;
   const x = (index) => left + (index / Math.max(1, dates.length - 1)) * plotWidth;
@@ -129,18 +129,17 @@ function makeChart(daily, dates, rollingAverage) {
     return `<text class="axis-label" x="${x(index)}" y="${height - 9}" text-anchor="middle">${label}</text>`;
   }).join("");
   const points = rollingAverage.map((value, index) => {
-    const windowStart = Math.max(0, index - 6);
+    const windowStart = Math.max(0, index - averageDays + 1);
     const startDate = formatDate(dates[windowStart], { month: "short", day: "numeric" });
     const endDate = formatDate(dates[index], { month: "short", day: "numeric" });
-    const windowDistance = daily.slice(windowStart, index + 1).reduce((sum, distance) => sum + distance, 0);
-    const tooltip = `7-day rolling average: ${formatDistance(value)} km/day, 7-day distance: ${formatDistance(windowDistance)} km, window: ${startDate}–${endDate}`;
-    return `<circle class="avg-point" cx="${x(index)}" cy="${y(value)}" r="5" tabindex="0" data-average="${formatDistance(value)}" data-distance="${formatDistance(windowDistance)}" data-window="${startDate}–${endDate}" aria-label="${tooltip}"></circle>`;
+    const tooltip = `${averageDays}-day rolling average: ${formatDistance(value)} km/day, window: ${startDate}–${endDate}`;
+    return `<circle class="avg-point" cx="${x(index)}" cy="${y(value)}" r="5" tabindex="0" data-kind="average" data-window-days="${averageDays}" data-average="${formatDistance(value)}" data-window="${startDate}–${endDate}" aria-label="${tooltip}"></circle>`;
   }).join("");
   const totalMarkers = rollingTotals.map((value, index) =>
-    `<circle class="sum-point" cx="${x(index)}" cy="${y(value)}" r="4" tabindex="0" data-average="${formatDistance(rollingAverage[index])}" data-distance="${formatDistance(value)}" data-window="${formatDate(dates[Math.max(0, index - 6)], { month: "short", day: "numeric" })}–${formatDate(dates[index], { month: "short", day: "numeric" })}" aria-label="7-day total: ${formatDistance(value)} km, average: ${formatDistance(rollingAverage[index])} km per day"></circle>`,
+    `<circle class="sum-point" cx="${x(index)}" cy="${y(value)}" r="4" tabindex="0" data-kind="total" data-window-days="${totalDays}" data-average="${formatDistance(rollingAverage[index])}" data-distance="${formatDistance(value)}" data-window="${formatDate(dates[Math.max(0, index - totalDays + 1)], { month: "short", day: "numeric" })}–${formatDate(dates[index], { month: "short", day: "numeric" })}" aria-label="${totalDays}-day total: ${formatDistance(value)} km"></circle>`,
   ).join("");
 
-  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Daily running distance bars, 7-day average line, and 7-day total line. All use the same vertical scale in kilometers">
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Daily running distance bars, ${averageDays}-day rolling average line, and ${totalDays}-day rolling total line. All use the same vertical scale in kilometers">
     ${grid.join("")}
     <path class="avg-area" d="${areaPath}"></path>
     ${bars}
@@ -165,10 +164,13 @@ function createChartTooltip() {
 const chartTooltip = createChartTooltip();
 
 function showChartTooltip(point, clientX, clientY) {
-  chartTooltip.children[0].textContent = "7-day running";
-  chartTooltip.children[1].textContent = `${point.dataset.average} km/day`;
-  chartTooltip.children[2].textContent = `Total distance: ${point.dataset.distance} km`;
-  chartTooltip.children[3].textContent = `Window size: 7 days (${point.dataset.window})`;
+  const windowDays = Number(point.dataset.windowDays);
+  chartTooltip.children[0].textContent = `${windowDays}-day rolling ${point.dataset.kind}`;
+  chartTooltip.children[1].textContent = point.dataset.kind === "average"
+    ? `Average distance: ${point.dataset.average} km/day`
+    : `Total distance: ${point.dataset.distance} km`;
+  chartTooltip.children[2].textContent = `Window: ${point.dataset.window}`;
+  chartTooltip.children[3].textContent = `Window length: ${windowDays} days`;
   chartTooltip.style.left = `${clientX}px`;
   chartTooltip.style.top = `${clientY - 12}px`;
   chartTooltip.classList.add("visible");
@@ -220,12 +222,16 @@ function renderRuns(runs, days) {
   const totals = new Map();
   for (const run of runs) totals.set(run.date, (totals.get(run.date) || 0) + run.distance / 1000);
   renderCalendar(importedActivities, runs);
+  renderWeekdayFrequency(importedActivities, weekdayPeriod.value);
 
+  const averageDays = Number(averagePeriod.value);
+  const totalDays = Number(totalPeriod.value);
+  const lookback = Math.max(averageDays, totalDays) - 1;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const dates = Array.from({ length: days + 6 }, (_, index) => {
+  const dates = Array.from({ length: days + lookback }, (_, index) => {
     const date = new Date(today);
-    date.setDate(today.getDate() - (days + 5) + index);
+    date.setDate(today.getDate() - (days + lookback - 1) + index);
     return date;
   });
   const daily = dates.map((date) => {
@@ -233,32 +239,64 @@ function renderRuns(runs, days) {
     return totals.get(key) || 0;
   });
   const rollingAverage = daily.map((_, index) => {
-    const start = Math.max(0, index - 6);
+    const start = Math.max(0, index - averageDays + 1);
     const sample = daily.slice(start, index + 1);
-    return sample.reduce((sum, distance) => sum + distance, 0) / 7;
+    return sample.reduce((sum, distance) => sum + distance, 0) / averageDays;
   });
-  const visibleDaily = daily.slice(6);
-  const visibleRolling = rollingAverage.slice(6);
-  const visibleDates = dates.slice(6);
+  const rollingTotals = daily.map((_, index) => {
+    const start = Math.max(0, index - totalDays + 1);
+    return daily.slice(start, index + 1).reduce((sum, distance) => sum + distance, 0);
+  });
+  const visibleDaily = daily.slice(lookback);
+  const visibleRolling = rollingAverage.slice(lookback);
+  const visibleTotals = rollingTotals.slice(lookback);
+  const visibleDates = dates.slice(lookback);
   const periodRuns = runs
     .filter((run) => run.date >= dateKey(visibleDates[0]) && run.date <= dateKey(visibleDates.at(-1)))
     .sort((left, right) => right.date.localeCompare(left.date));
-  const totalDistance = visibleDaily.reduce((sum, distance) => sum + distance, 0);
-  const latestAverage = visibleRolling.at(-1) || 0;
-  const bestDistance = Math.max(0, ...visibleDaily);
-  const bestIndex = visibleDaily.indexOf(bestDistance);
-
-  document.querySelector("#total-distance").textContent = formatDistance(totalDistance);
-  document.querySelector("#run-count").textContent = `Across ${periodRuns.length} runs`;
-  document.querySelector("#current-average").textContent = formatDistance(latestAverage);
-  document.querySelector("#best-day").textContent = formatDistance(bestDistance);
-  document.querySelector("#best-day-date").textContent = bestDistance
-    ? formatDate(visibleDates[bestIndex], { weekday: "short", month: "short", day: "numeric" })
-    : "No runs in this period";
-  document.querySelector("#chart").innerHTML = makeChart(visibleDaily, visibleDates, visibleRolling);
-  document.querySelector("#chart").setAttribute("aria-label", `Running distance and 7-day rolling average for the last ${days} days`);
+  document.querySelector("#chart").innerHTML = makeChart(visibleDaily, visibleDates, visibleRolling, visibleTotals, averageDays, totalDays);
+  document.querySelector("#chart").setAttribute("aria-label", `Running distance with ${averageDays}-day rolling average and ${totalDays}-day rolling total for the last ${days} days`);
+  document.querySelector("#average-legend-label").textContent = `${averageDays}-day average`;
+  document.querySelector("#total-legend-label").textContent = `${totalDays}-day total`;
   document.querySelector("#chart-range").textContent = `${formatDate(visibleDates[0], { month: "short", day: "numeric" }).toUpperCase()} — ${formatDate(visibleDates.at(-1), { month: "short", day: "numeric" }).toUpperCase()}`;
   renderRunList(periodRuns);
+}
+
+function renderWeekdayFrequency(activities, period) {
+  const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const counts = new Map();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayKey = dateKey(today);
+  const periodDays = period === "all" ? null : Number(period);
+  const start = new Date(today);
+  if (periodDays) start.setDate(start.getDate() - periodDays + 1);
+  const startKey = dateKey(start);
+  const periodActivities = activities.filter(({ date }) =>
+    period === "all" || (date >= startKey && date <= todayKey),
+  );
+
+  for (const activity of periodActivities) {
+    const [year, month, day] = activity.date.split("-").map(Number);
+    const weekday = (new Date(year, month - 1, day).getDay() + 6) % 7;
+    const category = categoryForActivity(activity.type);
+    const categoryCounts = counts.get(category) || Array(weekdays.length).fill(0);
+    categoryCounts[weekday] += 1;
+    counts.set(category, categoryCounts);
+  }
+
+  document.querySelector("#weekday-description").textContent = period === "all"
+    ? `Activity counts across all ${periodActivities.length} imported activities, grouped by weekday`
+    : `Activity counts for the last ${period} days, grouped by weekday (${periodActivities.length} activities)`;
+  weekdayFrequency.innerHTML = counts.size ? [...counts.entries()].map(([category, weekdayCounts]) => {
+    const maximum = Math.max(...weekdayCounts);
+    const cells = weekdayCounts.map((count, weekday) => {
+      const level = count ? Math.max(1, Math.ceil((count / maximum) * 4)) : 0;
+      const accessibleCount = `${activityCategories[category].label} on ${weekdays[weekday]}: ${count} ${count === 1 ? "activity" : "activities"}`;
+      return `<td class="weekday-frequency-cell level-${level}" aria-label="${accessibleCount}" title="${accessibleCount}">${count || "—"}</td>`;
+    }).join("");
+    return `<tr><th scope="row"><span class="weekday-activity-name"><i class="calendar-legend-dot marker-${category}" aria-hidden="true"></i>${activityCategories[category].label}</span></th>${cells}</tr>`;
+  }).join("") : '<tr><td class="weekday-empty" colspan="8">No activities in this period.</td></tr>';
 }
 
 function renderRunList(runs) {
@@ -488,6 +526,9 @@ for (const button of importButtons) {
 }
 csvInput.addEventListener("change", () => importFile(csvInput.files[0]));
 rangeSelect.addEventListener("change", refreshDashboard);
+averagePeriod.addEventListener("change", refreshDashboard);
+totalPeriod.addEventListener("change", refreshDashboard);
+weekdayPeriod.addEventListener("change", () => renderWeekdayFrequency(importedActivities, weekdayPeriod.value));
 
 try {
   const saved = JSON.parse(localStorage.getItem("stride-garmin-runs") || "null");
