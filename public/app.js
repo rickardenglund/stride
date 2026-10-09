@@ -1,26 +1,84 @@
+import { normalizeStoredRuns, parseGarminCsv } from "./csv.js";
+
 const dashboard = document.querySelector("#dashboard");
 const connectState = document.querySelector("#connect-state");
-const loadingState = document.querySelector("#loading-state");
 const notice = document.querySelector("#notice");
 const rangeSelect = document.querySelector("#range-select");
+const distanceUnit = document.querySelector("#distance-unit");
 const connectionLabel = document.querySelector("#connection-label");
 const statusDot = document.querySelector(".status-dot");
-const connectButton = document.querySelector("#connect-button");
+const csvInput = document.querySelector("#csv-input");
+const calendarDays = document.querySelector("#calendar-days");
+const calendarLegend = document.querySelector("#calendar-legend");
+const calendarPrev = document.querySelector("#calendar-prev");
+const calendarNext = document.querySelector("#calendar-next");
+const runsList = document.querySelector("#runs-list");
+const runsSummary = document.querySelector("#runs-summary");
+const chart = document.querySelector("#chart");
+const importButtons = [document.querySelector("#import-button"), document.querySelector("#import-cta")];
+let importedRuns = [];
+let importedActivities = [];
+let importedFileName = "";
+let calendarMonth = null;
 
-function formatDistance(distance) {
-  return distance.toLocaleString(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+const activityCategories = {
+  running: { label: "Running", color: "#1d4f7a", background: "#dfeef8" },
+  trail: { label: "Trail running", color: "#8b5a39", background: "#f3e5d9" },
+  cycling: { label: "Cycling", color: "#2c7bb8", background: "#dfe9f7" },
+  walking: { label: "Walking & hiking", color: "#3a5d8b", background: "#e7edf9" },
+  swimming: { label: "Swimming", color: "#0d5c73", background: "#dff4fb" },
+  strength: { label: "Strength", color: "#865528", background: "#f5e7da" },
+  climbing: { label: "Climbing", color: "#4f3d7d", background: "#efeafb" },
+  yoga: { label: "Yoga", color: "#2d5e71", background: "#e9f3f7" },
+  other: { label: "Other", color: "#303a34", background: "#eef2f4" },
+};
+
+function categoryForActivity(type) {
+  const normalized = type.toLowerCase();
+  if (/trail/.test(normalized)) return "trail";
+  if (/run|running/.test(normalized)) return "running";
+  if (/cycl|bike|biking/.test(normalized)) return "cycling";
+  if (/walk|hike/.test(normalized)) return "walking";
+  if (/swim/.test(normalized)) return "swimming";
+  if (/yoga/.test(normalized)) return "yoga";
+  if (/climb|boulder/.test(normalized)) return "climbing";
+  if (/strength|weight|workout|cardio/.test(normalized)) return "strength";
+  return "other";
+}
+
+function formatDistance(distance, fractionDigits = 1) {
+  return distance.toLocaleString(undefined, { maximumFractionDigits: fractionDigits, minimumFractionDigits: fractionDigits });
 }
 
 function formatDate(date, options) {
   return new Intl.DateTimeFormat(undefined, options).format(date);
 }
 
-function setLoading(loading) {
-  loadingState.hidden = !loading;
-  if (loading) {
-    dashboard.hidden = true;
-    connectState.hidden = true;
-  }
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character]);
+}
+
+function formatPace(secondsPerKm) {
+  if (!Number.isFinite(secondsPerKm) || secondsPerKm <= 0) return "—";
+  const rounded = Math.round(secondsPerKm);
+  return `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, "0")} /km`;
+}
+
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return "—";
+  const rounded = Math.round(seconds);
+  const hours = Math.floor(rounded / 3600);
+  const minutes = Math.floor((rounded % 3600) / 60);
+  const remainingSeconds = rounded % 60;
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`
+    : `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
 function showError(message) {
@@ -37,7 +95,11 @@ function makeChart(daily, dates, rollingAverage) {
   const bottom = 34;
   const plotWidth = width - left - right;
   const plotHeight = height - top - bottom;
-  const maxValue = Math.max(5, ...daily, ...rollingAverage);
+  const rollingTotals = rollingAverage.map((average, index) => {
+    const windowStart = Math.max(0, index - 6);
+    return daily.slice(windowStart, index + 1).reduce((sum, distance) => sum + distance, 0);
+  });
+  const maxValue = Math.max(5, ...daily, ...rollingAverage, ...rollingTotals);
   const maxY = Math.ceil(maxValue / 5) * 5;
   const x = (index) => left + (index / Math.max(1, dates.length - 1)) * plotWidth;
   const y = (value) => top + plotHeight - (value / maxY) * plotHeight;
@@ -49,7 +111,6 @@ function makeChart(daily, dates, rollingAverage) {
     grid.push(`<line class="grid-line" x1="${left}" y1="${position}" x2="${width - right}" y2="${position}"></line>`);
     grid.push(`<text class="axis-label" x="${left - 10}" y="${position + 3}" text-anchor="end">${value}</text>`);
   }
-
   const bars = daily.map((value, index) => {
     const barHeight = (value / maxY) * plotHeight;
     const barX = x(index) - barWidth / 2;
@@ -58,6 +119,8 @@ function makeChart(daily, dates, rollingAverage) {
 
   const linePoints = rollingAverage.map((value, index) => `${x(index)},${y(value)}`);
   const linePath = linePoints.map((point, index) => `${index === 0 ? "M" : "L"}${point}`).join(" ");
+  const totalPoints = rollingTotals.map((value, index) => `${x(index)},${y(value)}`);
+  const totalPath = totalPoints.map((point, index) => `${index === 0 ? "M" : "L"}${point}`).join(" ");
   const areaPath = `${linePath} L${x(dates.length - 1)},${y(0)} L${x(0)},${y(0)} Z`;
   const labelStep = Math.max(1, Math.ceil(dates.length / 7));
   const labels = dates.map((date, index) => {
@@ -66,23 +129,97 @@ function makeChart(daily, dates, rollingAverage) {
     return `<text class="axis-label" x="${x(index)}" y="${height - 9}" text-anchor="middle">${label}</text>`;
   }).join("");
   const points = rollingAverage.map((value, index) => {
-    if (index % 7 !== 0 && index !== rollingAverage.length - 1) return "";
-    return `<circle class="avg-point" cx="${x(index)}" cy="${y(value)}" r="2.6"><title>${formatDate(dates[index], { month: "short", day: "numeric" })}: ${formatDistance(value)} km/day 7-day average</title></circle>`;
+    const windowStart = Math.max(0, index - 6);
+    const startDate = formatDate(dates[windowStart], { month: "short", day: "numeric" });
+    const endDate = formatDate(dates[index], { month: "short", day: "numeric" });
+    const windowDistance = daily.slice(windowStart, index + 1).reduce((sum, distance) => sum + distance, 0);
+    const tooltip = `7-day rolling average: ${formatDistance(value)} km/day, 7-day distance: ${formatDistance(windowDistance)} km, window: ${startDate}–${endDate}`;
+    return `<circle class="avg-point" cx="${x(index)}" cy="${y(value)}" r="5" tabindex="0" data-average="${formatDistance(value)}" data-distance="${formatDistance(windowDistance)}" data-window="${startDate}–${endDate}" aria-label="${tooltip}"></circle>`;
   }).join("");
+  const totalMarkers = rollingTotals.map((value, index) =>
+    `<circle class="sum-point" cx="${x(index)}" cy="${y(value)}" r="4" tabindex="0" data-average="${formatDistance(rollingAverage[index])}" data-distance="${formatDistance(value)}" data-window="${formatDate(dates[Math.max(0, index - 6)], { month: "short", day: "numeric" })}–${formatDate(dates[index], { month: "short", day: "numeric" })}" aria-label="7-day total: ${formatDistance(value)} km, average: ${formatDistance(rollingAverage[index])} km per day"></circle>`,
+  ).join("");
 
-  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Bar chart of daily running distance and line chart of 7-day average in kilometers">
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Daily running distance bars, 7-day average line, and 7-day total line. All use the same vertical scale in kilometers">
     ${grid.join("")}
     <path class="avg-area" d="${areaPath}"></path>
     ${bars}
     <path class="avg-path" d="${linePath}"></path>
+    <path class="sum-path" d="${totalPath}"></path>
     ${points}
+    ${totalMarkers}
     ${labels}
   </svg>`;
 }
 
+function createChartTooltip() {
+  const tooltip = document.createElement("div");
+  tooltip.className = "calendar-tooltip chart-tooltip";
+  tooltip.setAttribute("role", "tooltip");
+  tooltip.setAttribute("aria-hidden", "true");
+  tooltip.innerHTML = "<strong></strong><span></span><span></span><span></span>";
+  document.body.append(tooltip);
+  return tooltip;
+}
+
+const chartTooltip = createChartTooltip();
+
+function showChartTooltip(point, clientX, clientY) {
+  chartTooltip.children[0].textContent = "7-day running";
+  chartTooltip.children[1].textContent = `${point.dataset.average} km/day`;
+  chartTooltip.children[2].textContent = `Total distance: ${point.dataset.distance} km`;
+  chartTooltip.children[3].textContent = `Window size: 7 days (${point.dataset.window})`;
+  chartTooltip.style.left = `${clientX}px`;
+  chartTooltip.style.top = `${clientY - 12}px`;
+  chartTooltip.classList.add("visible");
+  chartTooltip.setAttribute("aria-hidden", "false");
+
+  const bounds = chartTooltip.getBoundingClientRect();
+  const margin = 8;
+  const left = Math.min(
+    window.innerWidth - bounds.width / 2 - margin,
+    Math.max(bounds.width / 2 + margin, clientX),
+  );
+  const top = clientY - bounds.height - 14 >= margin
+    ? clientY - bounds.height - 14
+    : Math.min(window.innerHeight - bounds.height - margin, clientY + 14);
+  chartTooltip.style.left = `${left}px`;
+  chartTooltip.style.top = `${top}px`;
+}
+
+function hideChartTooltip() {
+  chartTooltip.classList.remove("visible");
+  chartTooltip.setAttribute("aria-hidden", "true");
+}
+
+chart.addEventListener("pointerover", (event) => {
+  const point = event.target.closest(".avg-point, .sum-point");
+  if (point) showChartTooltip(point, event.clientX, event.clientY);
+});
+chart.addEventListener("pointermove", (event) => {
+  const point = event.target.closest(".avg-point, .sum-point");
+  if (point) showChartTooltip(point, event.clientX, event.clientY);
+});
+chart.addEventListener("pointerout", (event) => {
+  if (event.target.closest(".avg-point, .sum-point") && !event.relatedTarget?.closest?.(".avg-point, .sum-point")) {
+    hideChartTooltip();
+  }
+});
+chart.addEventListener("focusin", (event) => {
+  const point = event.target.closest(".avg-point, .sum-point");
+  if (point) {
+    const bounds = point.getBoundingClientRect();
+    showChartTooltip(point, bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+  }
+});
+chart.addEventListener("focusout", (event) => {
+  if (event.target.closest(".avg-point, .sum-point")) hideChartTooltip();
+});
+
 function renderRuns(runs, days) {
   const totals = new Map();
   for (const run of runs) totals.set(run.date, (totals.get(run.date) || 0) + run.distance / 1000);
+  renderCalendar(importedActivities, runs);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -103,13 +240,16 @@ function renderRuns(runs, days) {
   const visibleDaily = daily.slice(6);
   const visibleRolling = rollingAverage.slice(6);
   const visibleDates = dates.slice(6);
+  const periodRuns = runs
+    .filter((run) => run.date >= dateKey(visibleDates[0]) && run.date <= dateKey(visibleDates.at(-1)))
+    .sort((left, right) => right.date.localeCompare(left.date));
   const totalDistance = visibleDaily.reduce((sum, distance) => sum + distance, 0);
   const latestAverage = visibleRolling.at(-1) || 0;
   const bestDistance = Math.max(0, ...visibleDaily);
   const bestIndex = visibleDaily.indexOf(bestDistance);
 
   document.querySelector("#total-distance").textContent = formatDistance(totalDistance);
-  document.querySelector("#run-count").textContent = `Across ${runs.filter((run) => run.date >= dateKey(visibleDates[0])).length} runs`;
+  document.querySelector("#run-count").textContent = `Across ${periodRuns.length} runs`;
   document.querySelector("#current-average").textContent = formatDistance(latestAverage);
   document.querySelector("#best-day").textContent = formatDistance(bestDistance);
   document.querySelector("#best-day-date").textContent = bestDistance
@@ -118,53 +258,271 @@ function renderRuns(runs, days) {
   document.querySelector("#chart").innerHTML = makeChart(visibleDaily, visibleDates, visibleRolling);
   document.querySelector("#chart").setAttribute("aria-label", `Running distance and 7-day rolling average for the last ${days} days`);
   document.querySelector("#chart-range").textContent = `${formatDate(visibleDates[0], { month: "short", day: "numeric" }).toUpperCase()} — ${formatDate(visibleDates.at(-1), { month: "short", day: "numeric" }).toUpperCase()}`;
+  renderRunList(periodRuns);
 }
+
+function renderRunList(runs) {
+  runsSummary.textContent = `${runs.length} ${runs.length === 1 ? "run" : "runs"}`;
+  runsList.innerHTML = runs.length
+    ? runs.map((run) => {
+      const [year, month, day] = run.date.split("-").map(Number);
+      const date = formatDate(new Date(year, month - 1, day), {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+      const category = categoryForActivity(run.type || "Running");
+      return `<tr>
+        <td data-label="Date">${escapeHtml(date)}</td>
+        <td data-label="Activity"><span class="run-type activity-${category}">${escapeHtml(run.type || "Running")}</span></td>
+        <td data-label="Distance">${formatDistance(run.distance / 1000, 2)} km</td>
+        <td data-label="Pace">${formatPace(run.paceSecondsPerKm)}</td>
+      </tr>`;
+    }).join("")
+    : '<tr><td class="runs-empty" colspan="4">No runs in this period.</td></tr>';
+}
+
+function renderCalendar(activities, runs) {
+  setCalendarCategoryHighlight(null);
+  if (!calendarMonth) {
+    const mostRecent = activities.map((activity) => activity.date).sort().at(-1);
+    const [year, month] = mostRecent
+      ? mostRecent.split("-").map(Number)
+      : [new Date().getFullYear(), new Date().getMonth() + 1];
+    calendarMonth = new Date(year, month - 1, 1);
+  }
+
+  const monthlyActivities = new Map();
+  for (const activity of activities) {
+    const [year, month, day] = activity.date.split("-").map(Number);
+    if (year !== calendarMonth.getFullYear() || month !== calendarMonth.getMonth() + 1) continue;
+    const key = String(day);
+    const dayActivities = monthlyActivities.get(key) || { items: [], categories: new Set() };
+    dayActivities.items.push(activity);
+    dayActivities.categories.add(categoryForActivity(activity.type));
+    monthlyActivities.set(key, dayActivities);
+  }
+
+  const year = calendarMonth.getFullYear();
+  const month = calendarMonth.getMonth();
+  const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const rows = Math.ceil((firstWeekday + daysInMonth) / 7);
+  const dayCells = [];
+
+  for (let index = 0; index < rows * 7; index += 1) {
+    const day = index - firstWeekday + 1;
+    if (day < 1 || day > daysInMonth) {
+      dayCells.push("<td class=\"calendar-empty\" aria-hidden=\"true\"></td>");
+      continue;
+    }
+    const activity = monthlyActivities.get(String(day));
+    const categories = activity ? [...activity.categories] : [];
+    const fullDate = formatDate(new Date(year, month, day), { month: "long", day: "numeric", year: "numeric" });
+    const activityDetails = (activity?.items || []).map((item) => {
+      const category = categoryForActivity(item.type);
+      const lines = [`<strong>${escapeHtml(item.type)}</strong>`];
+      if (["running", "trail", "cycling"].includes(category)) {
+        lines.push(`<span>Distance: ${Number.isFinite(item.distance) ? `${formatDistance(item.distance / 1000, 2)} km` : "—"}</span>`);
+        lines.push(`<span>Time: ${formatDuration(item.durationSeconds)}</span>`);
+        lines.push(`<span>Pace: ${formatPace(item.paceSecondsPerKm)}</span>`);
+      } else if (category === "yoga") {
+        lines.push(`<span>Time: ${formatDuration(item.durationSeconds)}</span>`);
+        lines.push(`<span>Average heart rate: ${Number.isFinite(item.averageHeartRate) ? `${Math.round(item.averageHeartRate)} bpm` : "—"}</span>`);
+      } else {
+        lines.push(`<span>Time: ${formatDuration(item.durationSeconds)}</span>`);
+        lines.push(`<span>Average heart rate: ${Number.isFinite(item.averageHeartRate) ? `${Math.round(item.averageHeartRate)} bpm` : "—"}</span>`);
+      }
+      return `<span class="calendar-activity-detail">${lines.join("")}</span>`;
+    }).join("");
+    const runningCount = (activity?.items || []).filter((item) =>
+      ["running", "trail"].includes(categoryForActivity(item.type)),
+    ).length;
+    const otherActivityCount = (activity?.items.length || 0) - runningCount;
+    const daySummary = [
+      runningCount ? `${runningCount} ${runningCount === 1 ? "run" : "runs"}` : "",
+      otherActivityCount ? `${otherActivityCount} ${otherActivityCount === 1 ? "other activity" : "other activities"}` : "",
+    ].filter(Boolean).join(", ");
+    const description = `${fullDate}${activity ? `: ${daySummary} — ${categories.map((category) => activityCategories[category].label).join(", ")}` : ": no activity"}`;
+    const markers = categories.map((category) => `<i class="calendar-marker marker-${category}" aria-hidden="true"></i>`).join("");
+    const runTooltip = `<span class="calendar-tooltip" aria-hidden="true"><strong>${escapeHtml(fullDate)}</strong>${activityDetails || "<span>No activity details</span>"}</span>`;
+    const activityAccessibleDetails = (activity?.items || []).map((item) => {
+      const category = categoryForActivity(item.type);
+      return ["running", "trail", "cycling"].includes(category)
+        ? `${item.type}: distance ${Number.isFinite(item.distance) ? `${formatDistance(item.distance / 1000, 2)} kilometers` : "unavailable"}, time ${formatDuration(item.durationSeconds)}, pace ${formatPace(item.paceSecondsPerKm)}.`
+        : `${item.type}: time ${formatDuration(item.durationSeconds)}, average heart rate ${Number.isFinite(item.averageHeartRate) ? `${Math.round(item.averageHeartRate)} beats per minute` : "unavailable"}.`;
+    }).join(" ");
+    const accessibleDescription = `${description}. ${activityAccessibleDetails}`;
+    dayCells.push(
+      `<td class="${activity ? `calendar-active${categories.length === 1 ? ` activity-${categories[0]}` : " activity-mixed"}` : ""}"${activity ? ` data-activity-categories="${categories.join(" ")}"` : ""} title="${description}" aria-label="${escapeHtml(accessibleDescription)}"${activity ? ' tabindex="0"' : ""}><span>${day}</span>${markers ? `<span class="calendar-markers">${markers}</span>` : ""}${activity ? runTooltip : ""}</td>`,
+    );
+  }
+
+  calendarDays.innerHTML = Array.from({ length: rows }, (_, row) =>
+    `<tr>${dayCells.slice(row * 7, row * 7 + 7).join("")}</tr>`,
+  ).join("");
+  document.querySelector("#calendar-month").textContent = formatDate(calendarMonth, { month: "long", year: "numeric" });
+  const monthlyItems = [...monthlyActivities.values()].flatMap((activity) => activity.items);
+  const monthlyRunCount = monthlyItems.filter((activity) =>
+    ["running", "trail"].includes(categoryForActivity(activity.type)),
+  ).length;
+  const monthlyOtherCount = monthlyItems.length - monthlyRunCount;
+  const monthlyCountSummary = [
+    monthlyRunCount ? `${monthlyRunCount} ${monthlyRunCount === 1 ? "run" : "runs"}` : "",
+    monthlyOtherCount ? `${monthlyOtherCount} ${monthlyOtherCount === 1 ? "other activity" : "other activities"}` : "",
+  ].filter(Boolean).join(" · ");
+  document.querySelector("#calendar-summary").textContent =
+    `${monthlyActivities.size} ${monthlyActivities.size === 1 ? "active day" : "active days"}${monthlyCountSummary ? ` · ${monthlyCountSummary}` : ""}`;
+  const activeCategories = [...new Set([...monthlyActivities.values()].flatMap((activity) => [...activity.categories]))];
+  calendarLegend.innerHTML = activeCategories.length
+    ? activeCategories.map((category) => `<span class="calendar-legend-item" data-category="${category}" tabindex="0" aria-label="Highlight ${activityCategories[category].label} activities"><i class="calendar-legend-dot marker-${category}"></i>${activityCategories[category].label}</span>`).join("")
+    : '<span class="calendar-legend-empty">No activities this month</span>';
+
+  const monthIndexes = activities.map((activity) => {
+    const [activityYear, activityMonth] = activity.date.split("-").map(Number);
+    return activityYear * 12 + activityMonth - 1;
+  });
+  const currentIndex = year * 12 + month;
+  calendarPrev.disabled = monthIndexes.length === 0 || currentIndex <= Math.min(...monthIndexes);
+  calendarNext.disabled = monthIndexes.length === 0 || currentIndex >= Math.max(...monthIndexes);
+}
+
+function setCalendarCategoryHighlight(category) {
+  for (const cell of calendarDays.querySelectorAll(".calendar-active")) {
+    const matches = category && cell.dataset.activityCategories.split(" ").includes(category);
+    cell.classList.toggle("calendar-highlighted", Boolean(matches));
+    cell.classList.toggle("calendar-dimmed", Boolean(category && !matches));
+  }
+}
+
+calendarLegend.addEventListener("pointerover", (event) => {
+  const item = event.target.closest(".calendar-legend-item");
+  if (item && !item.contains(event.relatedTarget)) {
+    setCalendarCategoryHighlight(item.dataset.category);
+  }
+});
+calendarLegend.addEventListener("pointerout", (event) => {
+  const item = event.target.closest(".calendar-legend-item");
+  if (item && !item.contains(event.relatedTarget)) {
+    setCalendarCategoryHighlight(null);
+  }
+});
+calendarLegend.addEventListener("focusin", (event) => {
+  const item = event.target.closest(".calendar-legend-item");
+  if (item) setCalendarCategoryHighlight(item.dataset.category);
+});
+calendarLegend.addEventListener("focusout", (event) => {
+  if (!event.relatedTarget?.closest?.(".calendar-legend-item")) {
+    setCalendarCategoryHighlight(null);
+  }
+});
 
 function dateKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-async function loadRuns() {
+function refreshDashboard() {
+  if (importedRuns.length === 0) return;
+  renderRuns(importedRuns, Number(rangeSelect.value));
+}
+
+calendarPrev.addEventListener("click", () => {
+  calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
+  refreshDashboard();
+});
+calendarNext.addEventListener("click", () => {
+  calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
+  refreshDashboard();
+});
+
+function setImportedState() {
+  const hasRuns = importedRuns.length > 0;
+  dashboard.hidden = !hasRuns;
+  connectState.hidden = hasRuns;
+  statusDot.classList.toggle("connected", hasRuns);
+  connectionLabel.textContent = hasRuns
+    ? `${importedActivities.length} ${importedActivities.length === 1 ? "activity" : "activities"} imported`
+    : "No activities imported";
+  if (hasRuns) {
+    document.querySelector("#data-note").textContent =
+      `${importedFileName || "Garmin Connect CSV"} · Stored only in this browser`;
+  }
+}
+
+async function importFile(file) {
+  if (!file) return;
   notice.hidden = true;
-  setLoading(true);
   try {
-    const days = Number(rangeSelect.value);
-    const response = await fetch(`/api/runs?days=${days}`);
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Could not load your runs.");
-    renderRuns(result.runs, days);
-    dashboard.hidden = false;
-  } catch (error) {
-    showError(error.message);
-    connectState.hidden = false;
-  } finally {
-    setLoading(false);
-  }
-}
-
-async function initialize() {
-  try {
-    const response = await fetch("/api/status");
-    const status = await response.json();
-    if (!status.connected) {
-      connectState.hidden = false;
-      return;
+    const { runs, activities } = parseGarminCsv(await file.text(), distanceUnit.value);
+    importedRuns = runs;
+    importedActivities = activities;
+    importedFileName = file.name;
+    calendarMonth = null;
+    try {
+      localStorage.setItem("stride-garmin-runs", JSON.stringify({
+        version: 4,
+        fileName: importedFileName,
+        runs,
+        activities,
+        distanceUnit: "m",
+      }));
+    } catch {
+      showError("Your runs are loaded, but this browser could not save them. They will be lost when you close this page.");
     }
-    connectionLabel.textContent = status.athlete?.firstname
-      ? `Connected · ${status.athlete.firstname}`
-      : "Connected to Strava";
-    statusDot.classList.add("connected");
-    connectButton.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.1 13.4 12 9.2l-3.5 7h3.1l2.5-5 2.5 5h3.1l-3.5-7-2.1 4.2Z"/><path d="m8.5 16.2-1.3 2.6H4l4.5-9 1.6 3.2-1.6 3.2Z"/></svg> Refresh data`;
-    connectButton.href = "#";
-    connectButton.addEventListener("click", (event) => {
-      event.preventDefault();
-      loadRuns();
-    });
-    await loadRuns();
+    setImportedState();
+    refreshDashboard();
   } catch (error) {
-    showError(error.message || "Could not connect to the dashboard.");
+    showError(error.message || "Could not read the selected CSV file.");
   }
 }
 
-rangeSelect.addEventListener("change", loadRuns);
-initialize();
+for (const button of importButtons) {
+  button.addEventListener("click", () => {
+    csvInput.value = "";
+    csvInput.click();
+  });
+}
+csvInput.addEventListener("change", () => importFile(csvInput.files[0]));
+rangeSelect.addEventListener("change", refreshDashboard);
+
+try {
+  const saved = JSON.parse(localStorage.getItem("stride-garmin-runs") || "null");
+  if (saved && Array.isArray(saved.runs) && saved.runs.every((run) => typeof run.date === "string" && Number.isFinite(run.distance))) {
+    importedRuns = normalizeStoredRuns(saved.runs, saved.distanceUnit);
+    for (const run of importedRuns) {
+      if (typeof run.type !== "string") run.type = "Running";
+    }
+    importedActivities = Array.isArray(saved.activities)
+      ? saved.activities.filter((activity) => typeof activity.date === "string" && typeof activity.type === "string").map((activity) => ({
+        ...activity,
+        distance: Number.isFinite(activity.distance) ? activity.distance : null,
+        durationSeconds: Number.isFinite(activity.durationSeconds) ? activity.durationSeconds : null,
+        paceSecondsPerKm: Number.isFinite(activity.paceSecondsPerKm) ? activity.paceSecondsPerKm : null,
+        averageHeartRate: Number.isFinite(activity.averageHeartRate) ? activity.averageHeartRate : null,
+      }))
+      : saved.runs.map((run) => ({ date: run.date, type: "Running" }));
+    importedFileName = saved.fileName || "";
+    const hasSavedActivityTypes = Array.isArray(saved.activities);
+    if (saved.version !== 4 || saved.distanceUnit !== "m" || !hasSavedActivityTypes) {
+      try {
+        localStorage.setItem("stride-garmin-runs", JSON.stringify({
+          version: saved.version === 4 ? 4 : saved.version === 3 ? 3 : saved.version === 2 ? 2 : 1,
+          fileName: importedFileName,
+          runs: importedRuns,
+          activities: importedActivities,
+          distanceUnit: "m",
+        }));
+      } catch {
+        showError("Your saved runs were converted for this session, but the updated distances could not be saved.");
+      }
+    }
+    setImportedState();
+    refreshDashboard();
+    if (saved.version !== 4 || !hasSavedActivityTypes) {
+      showError("These saved activities are from an older import and may be missing activity details. Choose Import CSV and reselect your Garmin export to restore pace, time, and heart-rate data.");
+    }
+  }
+} catch {
+  showError("Saved activities could not be read. Please import the Garmin CSV again.");
+}

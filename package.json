@@ -1,10 +1,12 @@
 {
-  "name": "strava-running-dashboard",
+  "name": "stride-garmin-dashboard",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"

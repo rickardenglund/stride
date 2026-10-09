@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f7f7f3">
+    <meta name="theme-color" content="#0d1720">
     <title>Stride — your running, in rhythm</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,11 +18,11 @@
           <span>stride<span class="brand-period">.</span></span>
         </a>
         <div class="topbar-right">
-          <span class="sync-label"><span class="status-dot"></span><span id="connection-label">Not connected</span></span>
-          <a class="strava-button" id="connect-button" href="/auth/strava">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.1 13.4 12 9.2l-3.5 7h3.1l2.5-5 2.5 5h3.1l-3.5-7-2.1 4.2Z"/><path d="m8.5 16.2-1.3 2.6H4l4.5-9 1.6 3.2-1.6 3.2Z"/></svg>
-            Connect Strava
-          </a>
+          <span class="sync-label"><span class="status-dot"></span><span id="connection-label">No activities imported</span></span>
+          <button class="action-button" id="import-button" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+            Import CSV
+          </button>
         </div>
       </header>
 
@@ -41,6 +41,13 @@
                 <option value="90" selected>Last 90 days</option>
                 <option value="180">Last 6 months</option>
                 <option value="365">Last year</option>
+              </select>
+            </label>
+            <label class="range-select unit-select">
+              <span>CSV distance unit</span>
+              <select id="distance-unit" aria-label="Distance unit in CSV">
+                <option value="km" selected>Kilometers (km)</option>
+                <option value="mi">Miles (mi)</option>
               </select>
             </label>
           </div>
@@ -65,21 +72,64 @@
             </article>
           </div>
 
+          <section class="calendar-card" aria-labelledby="calendar-title">
+            <div class="calendar-heading">
+              <div>
+                <h2 id="calendar-title">Running calendar</h2>
+                <p id="calendar-summary">Activity days are marked</p>
+              </div>
+              <div class="calendar-controls">
+                <button class="calendar-nav" id="calendar-prev" type="button" aria-label="Previous month">‹</button>
+                <span id="calendar-month" aria-live="polite"></span>
+                <button class="calendar-nav" id="calendar-next" type="button" aria-label="Next month">›</button>
+              </div>
+            </div>
+            <table class="calendar-table" aria-labelledby="calendar-title">
+              <thead>
+                <tr>
+                  <th scope="col">Mon</th><th scope="col">Tue</th><th scope="col">Wed</th>
+                  <th scope="col">Thu</th><th scope="col">Fri</th><th scope="col">Sat</th><th scope="col">Sun</th>
+                </tr>
+              </thead>
+              <tbody id="calendar-days"></tbody>
+            </table>
+            <div class="calendar-legend" id="calendar-legend" aria-label="Activity type legend"></div>
+          </section>
+
           <article class="chart-card">
             <div class="chart-heading">
               <div>
-                <div class="chart-title-row"><h2>Your weekly rhythm</h2><span class="live-pill"><span></span> LIVE</span></div>
+                <div class="chart-title-row"><h2>Your weekly rhythm</h2><span class="live-pill"><span></span> GARMIN</span></div>
                 <p>Daily distance and your 7-day rolling average</p>
               </div>
               <div class="legend" aria-label="Chart legend">
                 <span><i class="legend-bar"></i> Daily distance</span>
                 <span><i class="legend-line"></i> 7-day average</span>
+                <span><i class="legend-total-line"></i> 7-day total</span>
               </div>
             </div>
             <div class="chart-wrap" id="chart" role="img" aria-label="Running distance chart"></div>
             <div class="chart-footer"><span>REST DAYS ARE PART OF THE TRAINING.</span><span id="chart-range"></span></div>
           </article>
-          <p class="data-note">Runs and trail runs · Data synced from Strava</p>
+          <section class="runs-card" aria-labelledby="runs-title">
+            <div class="runs-heading">
+              <div>
+                <h2 id="runs-title">Your runs</h2>
+                <p>Distance and average pace in this time period</p>
+              </div>
+              <span id="runs-summary" class="runs-summary">0 runs</span>
+            </div>
+            <div class="runs-table-wrap">
+              <table class="runs-table">
+                <thead>
+                  <tr><th scope="col">Date</th><th scope="col">Activity</th><th scope="col">Distance</th><th scope="col">Pace</th></tr>
+                </thead>
+                <tbody id="runs-list"></tbody>
+              </table>
+            </div>
+            <p class="pace-note">Pace uses activity duration when available; otherwise Garmin's average pace is used.</p>
+          </section>
+          <p class="data-note" id="data-note">Running activities · Imported from Garmin Connect</p>
         </section>
 
         <section class="connect-state" id="connect-state" hidden>
@@ -93,20 +143,20 @@
           <div class="connect-content">
             <div class="eyebrow"><span class="eyebrow-line"></span> YOUR NEXT MILE STARTS HERE</div>
             <h2>Your runs,<br><span>finding their rhythm.</span></h2>
-            <p>Connect Strava to see your daily distance and how your 7-day average changes over time. Rest days count, too.</p>
-            <a class="strava-button connect-cta" href="/auth/strava">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.1 13.4 12 9.2l-3.5 7h3.1l2.5-5 2.5 5h3.1l-3.5-7-2.1 4.2Z"/><path d="m8.5 16.2-1.3 2.6H4l4.5-9 1.6 3.2-1.6 3.2Z"/></svg>
-              Connect your Strava
-            </a>
-            <span class="privacy-note"><span>⌑</span> Your data stays yours. Stored only on this device.</span>
+            <p>Import the activities CSV from Garmin Connect to see your daily running distance and 7-day average. Rest days count, too.</p>
+            <button class="action-button connect-cta" id="import-cta" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+              Choose Garmin CSV
+            </button>
+            <span class="privacy-note"><span>⌑</span> Your data stays on this device. Nothing is uploaded.</span>
           </div>
         </section>
 
+        <input id="csv-input" type="file" accept=".csv,text/csv" hidden>
         <div class="notice" id="notice" role="alert" hidden></div>
-        <div class="loading-state" id="loading-state" hidden><span class="spinner"></span><span>Finding your rhythm…</span></div>
       </main>
-      <footer><span>MADE FOR THE LOVE OF THE LONG RUN</span><span>STRIDE <b>·</b> 2025</span></footer>
+      <footer><span>MADE FOR THE LOVE OF THE LONG RUN</span><span>STRIDE <b>·</b> 2026</span></footer>
     </div>
-    <script src="/app.js" defer></script>
+    <script type="module" src="/app.js"></script>
   </body>
 </html>
