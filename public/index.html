@@ -69,7 +69,7 @@
           <article class="chart-card">
             <div class="chart-heading">
               <div>
-                <div class="chart-title-row"><h2>Your weekly rhythm</h2><span class="live-pill"><span></span> GARMIN</span></div>
+                <div class="chart-title-row"><h2>Running load</h2></div>
                 <p>Daily distance with configurable rolling average and total</p>
               </div>
               <div class="chart-options">
@@ -84,14 +84,17 @@
                     </select>
                   </label>
                 </div>
-                <div class="legend" aria-label="Chart legend">
-                  <span><i class="legend-bar"></i> Daily distance</span>
-                  <span><i class="legend-line"></i><span id="average-legend-label">7-day average</span></span>
-                  <span><i class="legend-total-line"></i><span id="total-legend-label">7-day total</span></span>
-                </div>
               </div>
             </div>
-            <div class="chart-wrap" id="chart" role="img" aria-label="Running distance chart"></div>
+            <div class="chart-wrap" id="chart" role="group" aria-label="Running distance chart"></div>
+            <div class="chart-meta-row">
+              <div class="legend" aria-label="Chart legend">
+                <span><i class="legend-bar"></i> Daily distance</span>
+                <span><i class="legend-line"></i><span id="average-legend-label">7-day average</span></span>
+                <span><i class="legend-total-line"></i><span id="total-legend-label">7-day total</span></span>
+              </div>
+              <button class="chart-latest-button" id="running-load-latest" type="button" hidden><span aria-hidden="true">→</span> Latest</button>
+            </div>
             <div class="chart-footer"><span>REST DAYS ARE PART OF THE TRAINING.</span><span id="chart-range"></span></div>
           </article>
           <section class="runs-card" aria-labelledby="runs-title">
@@ -122,6 +125,9 @@
                 </div>
               </div>
               <div id="activity-frequency-chart" class="activity-frequency-chart"></div>
+              <div class="chart-meta-row chart-meta-row-end">
+                <button class="chart-latest-button" id="activity-timeline-latest" type="button" hidden><span aria-hidden="true">→</span> Latest</button>
+              </div>
             </article>
             <section class="runs-card weekday-card" aria-labelledby="weekday-title">
               <div class="runs-heading">
@@ -146,6 +152,17 @@
           </div>
           <p class="data-note" id="data-note">Running activities · Imported from Garmin Connect</p>
         </section>
+
+        <dialog class="run-detail-dialog" id="run-detail-dialog" aria-labelledby="run-detail-title">
+          <div class="run-detail-heading">
+            <div>
+              <h2 id="run-detail-title"></h2>
+              <p id="run-detail-date"></p>
+            </div>
+            <button class="run-detail-close" id="run-detail-close" type="button" aria-label="Close activity details">×</button>
+          </div>
+          <dl class="run-detail-list" id="run-detail-list"></dl>
+        </dialog>
 
         <section class="connect-state" id="connect-state" hidden>
           <div class="connect-art" aria-hidden="true">

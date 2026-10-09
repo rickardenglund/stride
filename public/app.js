@@ -18,12 +18,20 @@ const runsList = document.querySelector("#runs-list");
 const runsSummary = document.querySelector("#runs-summary");
 const weekdayFrequency = document.querySelector("#weekday-frequency");
 const activityFrequencyChart = document.querySelector("#activity-frequency-chart");
+const runningLoadLatest = document.querySelector("#running-load-latest");
+const activityTimelineLatest = document.querySelector("#activity-timeline-latest");
+const runDetailDialog = document.querySelector("#run-detail-dialog");
+const runDetailTitle = document.querySelector("#run-detail-title");
+const runDetailDate = document.querySelector("#run-detail-date");
+const runDetailList = document.querySelector("#run-detail-list");
+const runDetailClose = document.querySelector("#run-detail-close");
 const chart = document.querySelector("#chart");
 const importButtons = [document.querySelector("#import-button"), document.querySelector("#import-cta")];
 let importedRuns = [];
 let importedActivities = [];
 let importedFileName = "";
 let calendarMonth = null;
+let visibleRuns = [];
 
 const activityCategories = {
   running: { label: "Running", color: "#1d4f7a", background: "#dfeef8", stripe: "#244760" },
@@ -113,11 +121,12 @@ function makeChart(daily, dates, rollingAverage, rollingTotals, averageDays, tot
   const y = (value) => top + plotHeight - (value / maxY) * plotHeight;
   const barWidth = Math.max(2, Math.min(7, (plotWidth / dates.length) * 0.55));
   const grid = [];
+  const yAxisLabels = [];
 
   for (let value = 0; value <= maxY; value += maxY <= 10 ? 2 : 5) {
     const position = y(value);
     grid.push(`<line class="grid-line" x1="${left}" y1="${position}" x2="${width - right}" y2="${position}"></line>`);
-    grid.push(`<text class="axis-label" x="${left - 10}" y="${position + 3}" text-anchor="end">${value}</text>`);
+    yAxisLabels.push(`<text class="axis-label" x="${left - 10}" y="${position + 3}" text-anchor="end">${value}</text>`);
   }
   const bars = daily.map((value, index) => {
     const barHeight = (value / maxY) * plotHeight;
@@ -130,7 +139,7 @@ function makeChart(daily, dates, rollingAverage, rollingTotals, averageDays, tot
   const totalPoints = rollingTotals.map((value, index) => `${x(index)},${y(value)}`);
   const totalPath = totalPoints.map((point, index) => `${index === 0 ? "M" : "L"}${point}`).join(" ");
   const areaPath = `${linePath} L${x(dates.length - 1)},${y(0)} L${x(0)},${y(0)} Z`;
-  const labelStep = Math.max(1, Math.ceil(dates.length / 7));
+  const labelStep = Math.max(1, Math.ceil(80 * (dates.length - 1) / plotWidth));
   const labels = dates.map((date, index) => {
     if (index % labelStep !== 0 && index !== dates.length - 1) return "";
     const label = formatDate(date, { month: "short", day: "numeric" });
@@ -147,16 +156,23 @@ function makeChart(daily, dates, rollingAverage, rollingTotals, averageDays, tot
     `<circle class="sum-point" cx="${x(index)}" cy="${y(value)}" r="4" tabindex="0" data-kind="total" data-window-days="${totalDays}" data-average="${formatDistance(rollingAverage[index])}" data-distance="${formatDistance(value)}" data-window="${formatDate(dates[Math.max(0, index - totalDays + 1)], { month: "short", day: "numeric" })}–${formatDate(dates[index], { month: "short", day: "numeric" })}" aria-label="${totalDays}-day total: ${formatDistance(value)} km"></circle>`,
   ).join("");
 
-  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Daily running distance bars, ${averageDays}-day rolling average line, and ${totalDays}-day rolling total line. All use the same vertical scale in kilometers">
-    ${grid.join("")}
-    <path class="avg-area" d="${areaPath}"></path>
-    ${bars}
-    <path class="avg-path" d="${linePath}"></path>
-    <path class="sum-path" d="${totalPath}"></path>
-    ${points}
-    ${totalMarkers}
-    ${labels}
-  </svg>`;
+  return `<svg class="running-load-y-axis" width="${left}" height="${height}" viewBox="0 0 ${left} ${height}" aria-hidden="true">
+    ${yAxisLabels.join("")}
+  </svg>
+  <div class="running-load-plot-scroll">
+    <svg width="${width - left}" height="${height}" viewBox="0 0 ${width - left} ${height}" role="img" aria-label="Daily running distance bars, ${averageDays}-day rolling average line, and ${totalDays}-day rolling total line. All use the same vertical scale in kilometers">
+      <g transform="translate(${-left} 0)">
+        ${grid.join("")}
+        <path class="avg-area" d="${areaPath}"></path>
+        ${bars}
+        <path class="avg-path" d="${linePath}"></path>
+        <path class="sum-path" d="${totalPath}"></path>
+        ${points}
+        ${totalMarkers}
+        ${labels}
+      </g>
+    </svg>
+  </div>`;
 }
 
 function createChartTooltip() {
@@ -212,6 +228,35 @@ function showFrequencyTooltip(bar, clientX, clientY) {
 function hideChartTooltip() {
   chartTooltip.classList.remove("visible");
   chartTooltip.setAttribute("aria-hidden", "true");
+}
+
+function scrollChartToLatest(scrollContainer) {
+  const chartScroll = scrollContainer.querySelector(":scope > .running-load-plot-scroll, :scope > .frequency-chart-scroll");
+  if (chartScroll) chartScroll.scrollTo({ left: chartScroll.scrollWidth, behavior: "smooth" });
+}
+
+runningLoadLatest.addEventListener("click", () => scrollChartToLatest(chart));
+activityTimelineLatest.addEventListener("click", () => scrollChartToLatest(activityFrequencyChart));
+
+function updateLatestButton(chartScroll, button) {
+  const isAtLatest = chartScroll.scrollLeft + chartScroll.clientWidth >= chartScroll.scrollWidth - 2;
+  button.hidden = isAtLatest;
+}
+
+function monitorChartScroll(scrollContainer, button) {
+  const chartScroll = scrollContainer.querySelector(":scope > .running-load-plot-scroll, :scope > .frequency-chart-scroll");
+  if (!chartScroll) {
+    button.hidden = true;
+    return;
+  }
+  const updateButton = () => updateLatestButton(chartScroll, button);
+  chartScroll.addEventListener("scroll", updateButton, { passive: true });
+  updateButton();
+}
+
+function refreshChartLatestButton(scrollContainer, button) {
+  const chartScroll = scrollContainer.querySelector(":scope > .running-load-plot-scroll, :scope > .frequency-chart-scroll");
+  if (chartScroll) updateLatestButton(chartScroll, button);
 }
 
 chart.addEventListener("pointerover", (event) => {
@@ -307,7 +352,11 @@ function renderRuns(runs, days) {
   const periodRuns = runs
     .filter((run) => run.date >= dateKey(visibleDates[0]) && run.date <= dateKey(visibleDates.at(-1)))
     .sort((left, right) => right.date.localeCompare(left.date));
-  document.querySelector("#chart").innerHTML = makeChart(visibleDaily, visibleDates, visibleRolling, visibleTotals, windowDays, windowDays);
+  const runningLoadChart = document.querySelector("#chart");
+  runningLoadChart.innerHTML = makeChart(visibleDaily, visibleDates, visibleRolling, visibleTotals, windowDays, windowDays);
+  const chartScroll = runningLoadChart.querySelector(".running-load-plot-scroll");
+  chartScroll.scrollLeft = chartScroll.scrollWidth;
+  monitorChartScroll(runningLoadChart, runningLoadLatest);
   document.querySelector("#chart").setAttribute("aria-label", `Running distance with ${windowDays}-day rolling average and ${windowDays}-day rolling total for ${timePeriodDescription}`);
   document.querySelector("#average-legend-label").textContent = `${windowDays}-day average`;
   document.querySelector("#total-legend-label").textContent = `${windowDays}-day total`;
@@ -375,6 +424,7 @@ function renderActivityTimeline(activities, period, periodStart, periodEnd) {
   if (activities.length === 0) {
     description.textContent = "No activities in this period.";
     activityFrequencyChart.innerHTML = '<p class="weekday-empty">No activities to chart.</p>';
+    activityTimelineLatest.hidden = true;
     return;
   }
 
@@ -475,12 +525,14 @@ function renderActivityTimeline(activities, period, periodStart, periodEnd) {
   </div>`;
   const chartScroll = activityFrequencyChart.querySelector(".frequency-chart-scroll");
   chartScroll.scrollLeft = chartScroll.scrollWidth;
+  monitorChartScroll(activityFrequencyChart, activityTimelineLatest);
 }
 
 function renderRunList(runs) {
+  visibleRuns = runs;
   runsSummary.textContent = `${runs.length} ${runs.length === 1 ? "run" : "runs"}`;
   runsList.innerHTML = runs.length
-    ? runs.map((run) => {
+    ? runs.map((run, index) => {
       const [year, month, day] = run.date.split("-").map(Number);
       const date = formatDate(new Date(year, month - 1, day), {
         weekday: "short",
@@ -489,8 +541,8 @@ function renderRunList(runs) {
         year: "numeric",
       });
       const category = categoryForActivity(run.type || "Running");
-      return `<tr>
-        <td data-label="Date">${escapeHtml(date)}</td>
+      return `<tr data-run-index="${index}">
+        <td data-label="Date"><button class="run-detail-trigger" type="button" data-run-index="${index}" aria-label="Show details for ${escapeHtml(run.type || "Running")} on ${escapeHtml(date)}">${escapeHtml(date)}</button></td>
         <td data-label="Activity"><span class="run-type activity-${category}">${escapeHtml(run.type || "Running")}</span></td>
         <td data-label="Distance">${formatDistance(run.distance / 1000, 2)} km</td>
         <td data-label="Pace">${formatPace(run.paceSecondsPerKm)}</td>
@@ -498,6 +550,55 @@ function renderRunList(runs) {
     }).join("")
     : '<tr><td class="runs-empty" colspan="4">No runs in this period.</td></tr>';
 }
+
+function showRunDetails(run) {
+  const [year, month, day] = run.date.split("-").map(Number);
+  const date = formatDate(new Date(year, month - 1, day), {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+  runDetailTitle.textContent = run.type || "Running";
+  runDetailDate.textContent = date;
+  const details = [
+    ["Distance", Number.isFinite(run.distance) ? `${formatDistance(run.distance / 1000, 2)} km` : "—"],
+    ["Duration", formatDuration(run.durationSeconds)],
+    ["Average pace", formatPace(run.paceSecondsPerKm)],
+    ["Average heart rate", Number.isFinite(run.averageHeartRate) ? `${Math.round(run.averageHeartRate)} bpm` : "—"],
+  ];
+  runDetailList.innerHTML = details.map(([label, value]) =>
+    `<div><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`,
+  ).join("");
+  runDetailDialog.showModal();
+}
+
+runsList.addEventListener("click", (event) => {
+  const row = event.target.closest("tr[data-run-index]");
+  if (!row) return;
+  const run = visibleRuns[Number(row.dataset.runIndex)];
+  if (run) showRunDetails(run);
+});
+function closeRunDetails() {
+  if (runDetailDialog.open && !runDetailDialog.dataset.closing) {
+    runDetailDialog.dataset.closing = "true";
+    runDetailDialog.classList.add("is-closing");
+    runDetailDialog.addEventListener("animationend", () => {
+      runDetailDialog.close();
+      runDetailDialog.classList.remove("is-closing");
+      delete runDetailDialog.dataset.closing;
+    }, { once: true });
+  }
+}
+
+runDetailClose.addEventListener("click", closeRunDetails);
+runDetailDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeRunDetails();
+});
+runDetailDialog.addEventListener("click", (event) => {
+  if (event.target === runDetailDialog) closeRunDetails();
+});
 
 function renderCalendar(activities, runs) {
   setCalendarCategoryHighlight(null);
@@ -672,17 +773,28 @@ function setImportedState() {
 }
 
 function setDashboardView(view, updateUrl = false) {
-  const selectedButton = [...dashboardNav.querySelectorAll(".dashboard-nav-item")]
+  const buttons = [...dashboardNav.querySelectorAll(".dashboard-nav-item")];
+  const selectedButton = buttons
     .find((button) => button.dataset.view === view);
-  const activeButton = selectedButton || dashboardNav.querySelector('.dashboard-nav-item[data-view="calendar"]');
+  const activeButton = selectedButton || buttons.find((button) => button.dataset.view === "calendar");
+  const activeView = activeButton.dataset.view;
+  const panels = buttons.map((button) => document.querySelector(`#${button.getAttribute("aria-controls")}`));
 
-  for (const button of dashboardNav.querySelectorAll(".dashboard-nav-item")) {
+  for (const button of buttons) {
     const isSelected = button === activeButton;
     button.setAttribute("aria-selected", String(isSelected));
-    document.querySelector(`#${button.getAttribute("aria-controls")}`).hidden = !isSelected;
   }
 
-  const activeView = activeButton.dataset.view;
+  for (const panel of panels) {
+    const isSelected = panel.id === `${activeView}-view`;
+    panel.hidden = !isSelected;
+    panel.inert = !isSelected;
+    if (isSelected) panel.removeAttribute("aria-hidden");
+    else panel.setAttribute("aria-hidden", "true");
+  }
+
+  if (activeView === "runs") refreshChartLatestButton(chart, runningLoadLatest);
+  if (activeView === "weekday") refreshChartLatestButton(activityFrequencyChart, activityTimelineLatest);
   dashboard.dataset.activeView = activeView;
   if (updateUrl && window.location.hash !== `#${activeView}`) {
     window.history.pushState(null, "", `#${activeView}`);
