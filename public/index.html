@@ -39,6 +39,7 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
               Import CSV
             </button>
+            <button class="unload-button" id="unload-data-button" type="button" hidden>Unload data</button>
           </div>
         </div>
       </header>
@@ -196,12 +197,19 @@
             <div class="art-runner">↗</div>
           </div>
           <div class="connect-content">
-            <h2>Import your Garmin activities</h2>
-            <p>Choose an activities CSV to view your calendar, distance chart, weekday patterns, and activity list.</p>
+            <span class="welcome-eyebrow">WELCOME TO STRIDE</span>
+            <h2>Bring your runs to life</h2>
+            <p>First, download your activities from Garmin Connect:</p>
+            <ol class="welcome-steps">
+              <li>Sign in to Garmin Connect and open <strong>Activities → All Activities</strong>.</li>
+              <li>Scroll to the bottom of the activity list and choose <strong>Export CSV</strong>.</li>
+              <li>Select the downloaded CSV file below to explore your activities.</li>
+            </ol>
             <button class="action-button connect-cta" id="import-cta" type="button">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
               Choose Garmin CSV
             </button>
+            <p class="welcome-gpx-note">Have GPX files too? Import them after loading your CSV to see routes, heart rate, and elevation.</p>
             <span class="privacy-note"><span>⌑</span> Your data stays on this device. Nothing is uploaded.</span>
           </div>
         </section>

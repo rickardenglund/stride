@@ -36,6 +36,7 @@ const runElevationSection = document.querySelector("#run-elevation-section");
 const runElevationChart = document.querySelector("#run-elevation-chart");
 const gpxImportButton = document.querySelector("#gpx-import-button");
 const gpxInput = document.querySelector("#gpx-input");
+const unloadDataButton = document.querySelector("#unload-data-button");
 const chart = document.querySelector("#chart");
 const importButtons = [document.querySelector("#import-button"), document.querySelector("#import-cta")];
 let importedRuns = [];
@@ -1194,6 +1195,7 @@ function setImportedState() {
   dashboardNav.hidden = !hasRuns;
   dashboardPeriodControl.hidden = !hasRuns;
   gpxImportButton.hidden = !hasRuns;
+  unloadDataButton.hidden = !hasRuns;
   connectState.hidden = hasRuns;
   statusDot.classList.toggle("connected", hasRuns);
   connectionLabel.textContent = hasRuns
@@ -1203,6 +1205,30 @@ function setImportedState() {
     document.querySelector("#data-note").textContent =
       `${importedFileName || "Garmin Connect CSV"} · Stored only in this browser`;
   }
+}
+
+function unloadImportedData() {
+  if (!window.confirm("Unload all imported activities and GPX routes from this browser? The original files on your device will not be deleted.")) return;
+  try {
+    localStorage.removeItem("stride-garmin-runs");
+  } catch {
+    showError("Could not remove the saved activities from this browser.");
+    return;
+  }
+  if (runDetailDialog.open) closeRunDetails(false);
+  clearRunFromUrl();
+  importedRuns = [];
+  importedActivities = [];
+  importedFileName = "";
+  importedRoutes = [];
+  visibleRuns = [];
+  selectedRunDetails = null;
+  selectedRouteCoordinates = [];
+  selectedHeartRatePoints = [];
+  selectedElevationPoints = [];
+  calendarMonth = null;
+  notice.hidden = true;
+  setImportedState();
 }
 
 function setDashboardView(view, updateUrl = false) {
@@ -1320,6 +1346,7 @@ gpxImportButton.addEventListener("click", () => {
   gpxInput.click();
 });
 gpxInput.addEventListener("change", () => importGpxFiles([...gpxInput.files]));
+unloadDataButton.addEventListener("click", unloadImportedData);
 dashboardPeriod.addEventListener("change", refreshDashboard);
 rollingPeriod.addEventListener("change", refreshDashboard);
 
