@@ -25,6 +25,17 @@ const runDetailTitle = document.querySelector("#run-detail-title");
 const runDetailDate = document.querySelector("#run-detail-date");
 const runDetailList = document.querySelector("#run-detail-list");
 const runDetailClose = document.querySelector("#run-detail-close");
+const runDetailPrevious = document.querySelector("#run-detail-previous");
+const runDetailNext = document.querySelector("#run-detail-next");
+const runRouteSection = document.querySelector("#run-route-section");
+const runRouteChart = document.querySelector("#run-route-chart");
+const runRouteFilename = document.querySelector("#run-route-filename");
+const runHeartRateSection = document.querySelector("#run-heart-rate-section");
+const runHeartRateChart = document.querySelector("#run-heart-rate-chart");
+const runElevationSection = document.querySelector("#run-elevation-section");
+const runElevationChart = document.querySelector("#run-elevation-chart");
+const gpxImportButton = document.querySelector("#gpx-import-button");
+const gpxInput = document.querySelector("#gpx-input");
 const chart = document.querySelector("#chart");
 const importButtons = [document.querySelector("#import-button"), document.querySelector("#import-cta")];
 let importedRuns = [];
@@ -32,6 +43,11 @@ let importedActivities = [];
 let importedFileName = "";
 let calendarMonth = null;
 let visibleRuns = [];
+let importedRoutes = [];
+let selectedRunDetails = null;
+let selectedRouteCoordinates = [];
+let selectedHeartRatePoints = [];
+let selectedElevationPoints = [];
 
 const activityCategories = {
   running: { label: "Running", color: "#1d4f7a", background: "#dfeef8", stripe: "#244760" },
@@ -541,9 +557,15 @@ function renderRunList(runs) {
         year: "numeric",
       });
       const category = categoryForActivity(run.type || "Running");
+      const hasRoute = importedRoutes.some((route) =>
+        route.date === run.date && route.category === category,
+      );
+      const routeIndicator = hasRoute
+        ? '<svg class="run-route-indicator" viewBox="0 0 20 20" role="img" aria-label="GPS route available" title="GPS route available"><path d="M3 15c3-8 5-8 8-3s4 4 6-7"></path><circle cx="3" cy="15" r="1.5"></circle><circle cx="17" cy="5" r="1.5"></circle></svg>'
+        : "";
       return `<tr data-run-index="${index}">
         <td data-label="Date"><button class="run-detail-trigger" type="button" data-run-index="${index}" aria-label="Show details for ${escapeHtml(run.type || "Running")} on ${escapeHtml(date)}">${escapeHtml(date)}</button></td>
-        <td data-label="Activity"><span class="run-type activity-${category}">${escapeHtml(run.type || "Running")}</span></td>
+        <td data-label="Activity"><span class="run-type activity-${category}">${escapeHtml(run.type || "Running")}</span>${routeIndicator}</td>
         <td data-label="Distance">${formatDistance(run.distance / 1000, 2)} km</td>
         <td data-label="Pace">${formatPace(run.paceSecondsPerKm)}</td>
       </tr>`;
@@ -551,7 +573,18 @@ function renderRunList(runs) {
     : '<tr><td class="runs-empty" colspan="4">No runs in this period.</td></tr>';
 }
 
-function showRunDetails(run) {
+function showRunDetails(run, updateUrl = false) {
+  if (updateUrl) {
+    const runIndex = importedRuns.indexOf(run);
+    if (runIndex !== -1) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("run", String(runIndex));
+      if (url.hash !== "#runs") url.hash = "runs";
+      window.history.pushState(null, "", url);
+    }
+  }
+  runDetailDialog.classList.remove("is-closing");
+  delete runDetailDialog.dataset.closing;
   const [year, month, day] = run.date.split("-").map(Number);
   const date = formatDate(new Date(year, month - 1, day), {
     weekday: "long",
@@ -559,8 +592,13 @@ function showRunDetails(run) {
     day: "numeric",
     year: "numeric",
   });
-  runDetailTitle.textContent = run.type || "Running";
   runDetailDate.textContent = date;
+  runDetailDate.dataset.date = run.date;
+  runDetailDate.dataset.category = categoryForActivity(run.type || "Running");
+  selectedRunDetails = run;
+  const runIndex = visibleRuns.indexOf(run);
+  runDetailPrevious.disabled = runIndex <= 0;
+  runDetailNext.disabled = runIndex === -1 || runIndex >= visibleRuns.length - 1;
   const details = [
     ["Distance", Number.isFinite(run.distance) ? `${formatDistance(run.distance / 1000, 2)} km` : "—"],
     ["Duration", formatDuration(run.durationSeconds)],
@@ -570,17 +608,411 @@ function showRunDetails(run) {
   runDetailList.innerHTML = details.map(([label, value]) =>
     `<div><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`,
   ).join("");
-  runDetailDialog.showModal();
+  const matchingRoutes = importedRoutes.filter((route) =>
+    route.date === run.date && route.category === categoryForActivity(run.type || "Running"),
+  );
+  const route = matchingRoutes.length === 1 ? matchingRoutes[0] : null;
+  runDetailTitle.textContent = route?.name || run.type || "Running";
+  selectedRouteCoordinates = route ? getRouteSvgCoordinates(route.points) : [];
+  runRouteSection.hidden = !route;
+  runRouteChart.innerHTML = route ? renderRouteSvg(route.points) : "";
+  const routeElevations = route?.points.map((point) => point.elevation).filter(Number.isFinite) || [];
+  runRouteFilename.textContent = route
+    ? `${route.fileName}${routeElevations.length ? ` · Elevation ${Math.round(Math.min(...routeElevations))}–${Math.round(Math.max(...routeElevations))} m` : ""}`
+    : "";
+  selectedHeartRatePoints = route?.points.filter((point) => Number.isFinite(point.heartRate)) || [];
+  runHeartRateSection.hidden = selectedHeartRatePoints.length < 2;
+  runHeartRateChart.innerHTML = selectedHeartRatePoints.length >= 2
+    ? renderHeartRateSvg(selectedHeartRatePoints, (route.points.at(-1).index ?? route.points.length - 1) + 1)
+    : "";
+  selectedElevationPoints = route?.points.filter((point) => Number.isFinite(point.elevation)) || [];
+  runElevationSection.hidden = selectedElevationPoints.length < 2;
+  runElevationChart.innerHTML = selectedElevationPoints.length >= 2
+    ? renderElevationSvg(selectedElevationPoints, (route.points.at(-1).index ?? route.points.length - 1) + 1)
+    : "";
+  if (!runDetailDialog.open) runDetailDialog.showModal();
+}
+
+function clearRunFromUrl() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("run")) return;
+  url.searchParams.delete("run");
+  window.history.replaceState(null, "", url);
+}
+
+function syncRunDetailsFromUrl() {
+  const runId = new URL(window.location.href).searchParams.get("run");
+  if (runId === null) {
+    if (runDetailDialog.open) closeRunDetails(false);
+    return;
+  }
+  if (!/^\d+$/.test(runId)) {
+    if (runDetailDialog.open) closeRunDetails(false);
+    clearRunFromUrl();
+    return;
+  }
+  const run = importedRuns[Number(runId)];
+  if (!run) {
+    if (runDetailDialog.open) closeRunDetails(false);
+    clearRunFromUrl();
+    return;
+  }
+  if (dashboard.dataset.activeView !== "runs") setDashboardView("runs");
+  if (!visibleRuns.includes(run)) {
+    dashboardPeriod.value = "all";
+    refreshDashboard();
+  }
+  if (!runDetailDialog.open || selectedRunDetails !== run) showRunDetails(run);
+}
+
+function getRouteSvgCoordinates(points) {
+  const middleLatitude = points.reduce((sum, point) => sum + point.lat, 0) / points.length * Math.PI / 180;
+  const longitudeScale = Math.cos(middleLatitude);
+  const minLat = Math.min(...points.map((point) => point.lat));
+  const minLon = Math.min(...points.map((point) => point.lon));
+  const width = 640;
+  const height = 250;
+  const rawCoordinates = points.map((point, index) => ({
+    index: point.index ?? index,
+    routeX: (point.lon - minLon) * 111320 * longitudeScale,
+    routeY: (point.lat - minLat) * 111320,
+  }));
+  const minX = Math.min(...rawCoordinates.map(({ routeX }) => routeX));
+  const maxX = Math.max(...rawCoordinates.map(({ routeX }) => routeX));
+  const minY = Math.min(...rawCoordinates.map(({ routeY }) => routeY));
+  const maxY = Math.max(...rawCoordinates.map(({ routeY }) => routeY));
+  const projectedXRange = Math.max(maxX - minX, 1e-9);
+  const projectedYRange = Math.max(maxY - minY, 1e-9);
+  const padding = 22;
+  const scale = Math.min((width - padding * 2) / projectedXRange, (height - padding * 2) / projectedYRange);
+  const offsetX = (width - projectedXRange * scale) / 2;
+  const offsetY = (height - projectedYRange * scale) / 2;
+  return rawCoordinates.map((point) => ({
+    ...point,
+    routeX: offsetX + (point.routeX - minX) * scale,
+    routeY: height - offsetY - (point.routeY - minY) * scale,
+  }));
+}
+
+function renderRouteSvg(points) {
+  const coordinates = getRouteSvgCoordinates(points);
+  const routePoints = coordinates.map(({ routeX, routeY }) => `${routeX.toFixed(2)},${routeY.toFixed(2)}`).join(" ");
+  const start = coordinates[0];
+  const end = coordinates.at(-1);
+  const startAnchor = start.routeX < 320 ? "start" : "end";
+  const endAnchor = end.routeX < 320 ? "start" : "end";
+  const startLabelX = start.routeX + (startAnchor === "start" ? 8 : -8);
+  const endLabelX = end.routeX + (endAnchor === "start" ? 8 : -8);
+  return `<svg viewBox="0 0 640 250" role="img" aria-label="Imported GPS route shape, marked start and stop"><polyline points="${routePoints}"></polyline><circle class="run-route-start" cx="${start.routeX.toFixed(2)}" cy="${start.routeY.toFixed(2)}" r="5"></circle><text class="run-route-endpoint-label" x="${startLabelX.toFixed(2)}" y="${(start.routeY - 8).toFixed(2)}" text-anchor="${startAnchor}">START</text><circle class="run-route-end" cx="${end.routeX.toFixed(2)}" cy="${end.routeY.toFixed(2)}" r="5"></circle><text class="run-route-endpoint-label" x="${endLabelX.toFixed(2)}" y="${(end.routeY - 8).toFixed(2)}" text-anchor="${endAnchor}">STOP</text><circle class="run-route-hover-marker" cx="${start.routeX.toFixed(2)}" cy="${start.routeY.toFixed(2)}" r="7" visibility="hidden"></circle></svg>`;
+}
+
+function renderHeartRateSvg(points, totalPoints) {
+  const values = points.map((point) => point.heartRate);
+  const minimum = Math.floor(Math.min(...values) / 10) * 10;
+  const maximum = Math.ceil(Math.max(...values) / 10) * 10;
+  const range = Math.max(maximum - minimum, 10);
+  const width = 640;
+  const height = 180;
+  const left = 42;
+  const right = 12;
+  const top = 12;
+  const bottom = 24;
+  const plotHeight = height - top - bottom;
+  const plotWidth = width - left - right;
+  const coordinates = points.map((point) => {
+    const x = left + (point.index / Math.max(totalPoints - 1, 1)) * plotWidth;
+    const y = top + ((maximum - point.heartRate) / range) * plotHeight;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  }).join(" ");
+  const firstPoint = points[0];
+  const firstX = left + (firstPoint.index / Math.max(totalPoints - 1, 1)) * plotWidth;
+  const firstY = top + ((maximum - firstPoint.heartRate) / range) * plotHeight;
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Heart rate from ${Math.round(Math.min(...values))} to ${Math.round(Math.max(...values))} beats per minute">
+    <line class="heart-rate-grid" x1="${left}" y1="${top}" x2="${width - right}" y2="${top}"></line>
+    <line class="heart-rate-grid" x1="${left}" y1="${height - bottom}" x2="${width - right}" y2="${height - bottom}"></line>
+    <text class="heart-rate-label" x="${left - 7}" y="${top + 4}" text-anchor="end">${maximum}</text>
+    <text class="heart-rate-label" x="${left - 7}" y="${height - bottom + 4}" text-anchor="end">${minimum}</text>
+    <polyline points="${coordinates}"></polyline>
+    <line class="heart-rate-hover-line" x1="${firstX.toFixed(2)}" y1="${top}" x2="${firstX.toFixed(2)}" y2="${height - bottom}" visibility="hidden"></line>
+    <circle class="heart-rate-hover-marker" cx="${firstX.toFixed(2)}" cy="${firstY.toFixed(2)}" r="5" visibility="hidden"></circle>
+    <text class="heart-rate-axis-label" x="${left}" y="${height - 4}">Activity progress</text>
+    <text class="heart-rate-axis-label" x="${width - right}" y="${height - 4}" text-anchor="end">bpm</text>
+  </svg>`;
+}
+
+function renderElevationSvg(points, totalPoints) {
+  const values = points.map((point) => point.elevation);
+  let minimum = Math.floor(Math.min(...values) / 10) * 10;
+  let maximum = Math.ceil(Math.max(...values) / 10) * 10;
+  if (minimum === maximum) {
+    minimum -= 5;
+    maximum += 5;
+  }
+  const width = 640;
+  const height = 180;
+  const left = 42;
+  const right = 12;
+  const top = 12;
+  const bottom = 24;
+  const plotHeight = height - top - bottom;
+  const plotWidth = width - left - right;
+  const coordinates = points.map((point) => {
+    const x = left + (point.index / Math.max(totalPoints - 1, 1)) * plotWidth;
+    const y = top + ((maximum - point.elevation) / (maximum - minimum)) * plotHeight;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  }).join(" ");
+  const firstPoint = points[0];
+  const firstX = left + (firstPoint.index / Math.max(totalPoints - 1, 1)) * plotWidth;
+  const firstY = top + ((maximum - firstPoint.elevation) / (maximum - minimum)) * plotHeight;
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Elevation from ${Math.round(Math.min(...values))} to ${Math.round(Math.max(...values))} meters">
+    <line class="run-profile-grid" x1="${left}" y1="${top}" x2="${width - right}" y2="${top}"></line>
+    <line class="run-profile-grid" x1="${left}" y1="${height - bottom}" x2="${width - right}" y2="${height - bottom}"></line>
+    <text class="run-profile-label" x="${left - 7}" y="${top + 4}" text-anchor="end">${maximum}</text>
+    <text class="run-profile-label" x="${left - 7}" y="${height - bottom + 4}" text-anchor="end">${minimum}</text>
+    <polyline points="${coordinates}"></polyline>
+    <line class="run-profile-hover-line" x1="${firstX.toFixed(2)}" y1="${top}" x2="${firstX.toFixed(2)}" y2="${height - bottom}" visibility="hidden"></line>
+    <circle class="run-profile-hover-marker" cx="${firstX.toFixed(2)}" cy="${firstY.toFixed(2)}" r="5" visibility="hidden"></circle>
+    <text class="run-profile-axis-label" x="${left}" y="${height - 4}">Activity progress</text>
+    <text class="run-profile-axis-label" x="${width - right}" y="${height - 4}" text-anchor="end">m</text>
+  </svg>`;
+}
+
+function updateRunHover(targetIndex) {
+  if (selectedRouteCoordinates.length === 0) return;
+  const routePoint = selectedRouteCoordinates.reduce((closest, point) =>
+    Math.abs(point.index - targetIndex) < Math.abs(closest.index - targetIndex) ? point : closest,
+  );
+  const routeMarker = runRouteChart.querySelector(".run-route-hover-marker");
+  routeMarker?.setAttribute("cx", routePoint.routeX.toFixed(2));
+  routeMarker?.setAttribute("cy", routePoint.routeY.toFixed(2));
+  routeMarker?.setAttribute("visibility", "visible");
+
+  const plotLeft = 42;
+  const plotWidth = 586;
+  const totalPoints = (selectedRouteCoordinates.at(-1).index ?? selectedRouteCoordinates.length - 1) + 1;
+  if (selectedHeartRatePoints.length >= 2) {
+    const point = selectedHeartRatePoints.reduce((closest, candidate) =>
+      Math.abs(candidate.index - targetIndex) < Math.abs(closest.index - targetIndex) ? candidate : closest,
+    );
+    const values = selectedHeartRatePoints.map((sample) => sample.heartRate);
+    const minimum = Math.floor(Math.min(...values) / 10) * 10;
+    const maximum = Math.ceil(Math.max(...values) / 10) * 10;
+    const y = 12 + ((maximum - point.heartRate) / Math.max(maximum - minimum, 10)) * 144;
+    updateProfileHover(runHeartRateChart, point.index, y, totalPoints, plotLeft, plotWidth);
+  }
+  if (selectedElevationPoints.length >= 2) {
+    const point = selectedElevationPoints.reduce((closest, candidate) =>
+      Math.abs(candidate.index - targetIndex) < Math.abs(closest.index - targetIndex) ? candidate : closest,
+    );
+    let minimum = Math.floor(Math.min(...selectedElevationPoints.map((sample) => sample.elevation)) / 10) * 10;
+    let maximum = Math.ceil(Math.max(...selectedElevationPoints.map((sample) => sample.elevation)) / 10) * 10;
+    if (minimum === maximum) {
+      minimum -= 5;
+      maximum += 5;
+    }
+    const y = 12 + ((maximum - point.elevation) / (maximum - minimum)) * 144;
+    updateProfileHover(runElevationChart, point.index, y, totalPoints, plotLeft, plotWidth);
+  }
+}
+
+function updateProfileHover(chartElement, index, y, totalPoints, plotLeft, plotWidth) {
+  const svg = chartElement.querySelector("svg");
+  if (!svg) return;
+  const marker = svg.querySelector(".heart-rate-hover-marker, .run-profile-hover-marker");
+  const line = svg.querySelector(".heart-rate-hover-line, .run-profile-hover-line");
+  const x = plotLeft + (index / Math.max(totalPoints - 1, 1)) * plotWidth;
+  marker?.setAttribute("cx", x.toFixed(2));
+  marker?.setAttribute("cy", y.toFixed(2));
+  marker?.setAttribute("visibility", "visible");
+  line?.setAttribute("x1", x.toFixed(2));
+  line?.setAttribute("x2", x.toFixed(2));
+  line?.setAttribute("visibility", "visible");
+}
+
+function handleProfileHover(event, chartElement) {
+  const svg = chartElement.querySelector("svg");
+  if (!svg || selectedRouteCoordinates.length === 0) return;
+  const bounds = svg.getBoundingClientRect();
+  if (!bounds.width) return;
+  const chartX = ((event.clientX - bounds.left) / bounds.width) * 640;
+  const progress = Math.max(0, Math.min(1, (chartX - 42) / 586));
+  const totalPoints = (selectedRouteCoordinates.at(-1).index ?? selectedRouteCoordinates.length - 1) + 1;
+  updateRunHover(progress * Math.max(totalPoints - 1, 1));
+}
+
+runRouteChart.addEventListener("pointermove", (event) => {
+  const svg = runRouteChart.querySelector("svg");
+  if (!svg || (selectedHeartRatePoints.length < 2 && selectedElevationPoints.length < 2)) return;
+  const bounds = svg.getBoundingClientRect();
+  if (!bounds.width || !bounds.height) return;
+  const x = ((event.clientX - bounds.left) / bounds.width) * 640;
+  const y = ((event.clientY - bounds.top) / bounds.height) * 250;
+  const closestPoint = selectedRouteCoordinates.reduce((closest, point) => {
+    const distance = (point.routeX - x) ** 2 + (point.routeY - y) ** 2;
+    return distance < closest.distance ? { point, distance } : closest;
+  }, { point: selectedRouteCoordinates[0], distance: Infinity }).point;
+  updateRunHover(closestPoint.index);
+});
+
+runHeartRateChart.addEventListener("pointermove", (event) => handleProfileHover(event, runHeartRateChart));
+runElevationChart.addEventListener("pointermove", (event) => handleProfileHover(event, runElevationChart));
+
+function hideRunHover() {
+  runRouteChart.querySelector(".run-route-hover-marker")?.setAttribute("visibility", "hidden");
+  runHeartRateChart.querySelector(".heart-rate-hover-marker")?.setAttribute("visibility", "hidden");
+  runHeartRateChart.querySelector(".heart-rate-hover-line")?.setAttribute("visibility", "hidden");
+  runElevationChart.querySelector(".run-profile-hover-marker")?.setAttribute("visibility", "hidden");
+  runElevationChart.querySelector(".run-profile-hover-line")?.setAttribute("visibility", "hidden");
+}
+
+runHeartRateChart.addEventListener("pointerleave", hideRunHover);
+runElevationChart.addEventListener("pointerleave", hideRunHover);
+runRouteChart.addEventListener("pointerleave", hideRunHover);
+
+function inferGpxCategory(text) {
+  const normalized = text.toLowerCase();
+  for (const keyword of ["trail", "run", "running", "cycling", "bike", "biking", "walk", "hike", "swim", "strength", "climb", "yoga"]) {
+    if (normalized.includes(keyword)) return categoryForActivity(keyword);
+  }
+  return null;
+}
+
+function parseGpx(text, fileName) {
+  const document = new DOMParser().parseFromString(text, "application/xml");
+  if (document.querySelector("parsererror") || document.documentElement.localName !== "gpx") {
+    throw new Error(`${fileName} is not a valid GPX file.`);
+  }
+  const trackPoints = [...document.getElementsByTagNameNS("*", "trkpt"), ...document.getElementsByTagNameNS("*", "rtept")];
+  const points = trackPoints
+    .map((point) => {
+      const elevationText = point.getElementsByTagNameNS("*", "ele")[0]?.textContent.trim();
+      return {
+        lat: Number(point.getAttribute("lat")),
+        lon: Number(point.getAttribute("lon")),
+        elevation: elevationText ? Number(elevationText) : Number.NaN,
+        time: point.getElementsByTagNameNS("*", "time")[0]?.textContent.trim() || "",
+        heartRate: Number(point.getElementsByTagNameNS("*", "hr")[0]?.textContent.trim()),
+      };
+    })
+    .filter((point) => Number.isFinite(point.lat) && point.lat >= -90 && point.lat <= 90
+      && Number.isFinite(point.lon) && point.lon >= -180 && point.lon <= 180);
+  if (points.length < 2) throw new Error(`${fileName} needs at least two valid GPS points.`);
+  const firstTimestamp = points.find((point) => point.time)?.time;
+  const metadataTimestamp = document.getElementsByTagNameNS("*", "metadata")[0]
+    ?.getElementsByTagNameNS("*", "time")[0]?.textContent.trim();
+  const parsedTime = firstTimestamp || metadataTimestamp;
+  if (!parsedTime || Number.isNaN(new Date(parsedTime).getTime())) {
+    throw new Error(`${fileName} has no usable activity date in its GPS data.`);
+  }
+  const date = dateKey(new Date(parsedTime));
+  const name = [...document.getElementsByTagNameNS("*", "name")][0]?.textContent.trim() || "";
+  const step = Math.max(1, Math.ceil(points.length / 1000));
+  return {
+    fileName,
+    name,
+    date,
+    category: inferGpxCategory(`${fileName} ${name}`),
+    points: points
+      .map((point, index) => ({ ...point, index }))
+      .filter((point) => point.index % step === 0 || point.index === points.length - 1)
+      .map(({ lat, lon, elevation, heartRate, index }) => ({
+        lat,
+        lon,
+        ...(Number.isFinite(elevation) ? { elevation } : {}),
+        ...(Number.isFinite(heartRate) && heartRate > 0 ? { heartRate } : {}),
+        index,
+      })),
+  };
+}
+
+function persistImportedData() {
+  try {
+    localStorage.setItem("stride-garmin-runs", JSON.stringify({
+      version: 4,
+      fileName: importedFileName,
+      runs: importedRuns,
+      activities: importedActivities,
+      routes: importedRoutes,
+      distanceUnit: "m",
+    }));
+    return true;
+  } catch {
+    showError("Your activities and routes are loaded, but this browser could not save them. They will be lost when you close this page.");
+    return false;
+  }
+}
+
+async function importGpxFiles(files) {
+  if (!files.length) return;
+  notice.hidden = true;
+  let importedCount = 0;
+  const errors = [];
+  for (const file of files) {
+    try {
+      const route = parseGpx(await file.text(), file.name);
+      const candidates = importedRuns.filter((run) => run.date === route.date
+        && (!route.category || categoryForActivity(run.type || "Running") === route.category));
+      if (candidates.length !== 1) {
+        errors.push(candidates.length
+          ? `${file.name}: multiple runs match its date${route.category ? " and activity type" : ""}.`
+          : `${file.name}: no run matches its date${route.category ? " and activity type" : ""}.`);
+        continue;
+      }
+      route.category = categoryForActivity(candidates[0].type || "Running");
+      const existingIndex = importedRoutes.findIndex((existing) =>
+        existing.date === route.date && existing.category === route.category,
+      );
+      if (existingIndex === -1) importedRoutes.push(route);
+      else importedRoutes[existingIndex] = route;
+      importedCount += 1;
+    } catch (error) {
+      errors.push(error.message || `Could not read ${file.name}.`);
+    }
+  }
+  if (importedCount) {
+    if (!persistImportedData()) {
+      gpxInput.value = "";
+      return;
+    }
+    renderRunList(visibleRuns);
+    if (runDetailDialog.open && selectedRunDetails) showRunDetails(selectedRunDetails);
+  }
+  if (errors.length) {
+    notice.textContent = `${importedCount ? `Imported ${importedCount} GPX route${importedCount === 1 ? "" : "s"}. ` : ""}${errors.join(" ")}`;
+    notice.hidden = false;
+  } else if (importedCount && !notice.textContent.startsWith("Your activities and routes are loaded")) {
+    showError(`Imported ${importedCount} GPX route${importedCount === 1 ? "" : "s"}.`);
+  }
+  gpxInput.value = "";
 }
 
 runsList.addEventListener("click", (event) => {
   const row = event.target.closest("tr[data-run-index]");
   if (!row) return;
   const run = visibleRuns[Number(row.dataset.runIndex)];
-  if (run) showRunDetails(run);
+  if (run) showRunDetails(run, true);
 });
-function closeRunDetails() {
+function showAdjacentRun(offset) {
+  const currentIndex = visibleRuns.indexOf(selectedRunDetails);
+  const nextRun = visibleRuns[currentIndex + offset];
+  if (runDetailDialog.open && nextRun) showRunDetails(nextRun, true);
+}
+
+runDetailPrevious.addEventListener("click", () => showAdjacentRun(-1));
+runDetailNext.addEventListener("click", () => showAdjacentRun(1));
+runDetailDialog.addEventListener("keydown", (event) => {
+  if (event.key === "ArrowLeft" && !runDetailPrevious.disabled) {
+    event.preventDefault();
+    showAdjacentRun(-1);
+  } else if (event.key === "ArrowRight" && !runDetailNext.disabled) {
+    event.preventDefault();
+    showAdjacentRun(1);
+  }
+});
+
+function closeRunDetails(updateUrl = true) {
   if (runDetailDialog.open && !runDetailDialog.dataset.closing) {
+    if (updateUrl) clearRunFromUrl();
     runDetailDialog.dataset.closing = "true";
     runDetailDialog.classList.add("is-closing");
     runDetailDialog.addEventListener("animationend", () => {
@@ -761,6 +1193,7 @@ function setImportedState() {
   dashboard.hidden = !hasRuns;
   dashboardNav.hidden = !hasRuns;
   dashboardPeriodControl.hidden = !hasRuns;
+  gpxImportButton.hidden = !hasRuns;
   connectState.hidden = hasRuns;
   statusDot.classList.toggle("connected", hasRuns);
   connectionLabel.textContent = hasRuns
@@ -796,8 +1229,14 @@ function setDashboardView(view, updateUrl = false) {
   if (activeView === "runs") refreshChartLatestButton(chart, runningLoadLatest);
   if (activeView === "weekday") refreshChartLatestButton(activityFrequencyChart, activityTimelineLatest);
   dashboard.dataset.activeView = activeView;
-  if (updateUrl && window.location.hash !== `#${activeView}`) {
-    window.history.pushState(null, "", `#${activeView}`);
+  if (activeView !== "runs" && runDetailDialog.open) closeRunDetails(false);
+  if (updateUrl) {
+    const url = new URL(window.location.href);
+    if (activeView !== "runs") url.searchParams.delete("run");
+    if (url.hash !== `#${activeView}` || url.href !== window.location.href) {
+      url.hash = activeView;
+      window.history.pushState(null, "", url);
+    }
   }
 }
 
@@ -832,6 +1271,9 @@ async function importFile(file) {
     importedRuns = runs;
     importedActivities = activities;
     importedFileName = file.name;
+    importedRoutes = importedRoutes.filter((route) => runs.some((run) =>
+      run.date === route.date && categoryForActivity(run.type || "Running") === route.category,
+    ));
     calendarMonth = null;
     try {
       localStorage.setItem("stride-garmin-runs", JSON.stringify({
@@ -839,6 +1281,7 @@ async function importFile(file) {
         fileName: importedFileName,
         runs,
         activities,
+        routes: importedRoutes,
         distanceUnit: "m",
       }));
     } catch {
@@ -862,11 +1305,20 @@ dashboardNav.addEventListener("click", (event) => {
   if (!button) return;
   setDashboardView(button.dataset.view, true);
 });
-window.addEventListener("popstate", () => setDashboardView(window.location.hash.slice(1)));
-window.addEventListener("hashchange", () => setDashboardView(window.location.hash.slice(1)));
+function handleLocationChange() {
+  setDashboardView(window.location.hash.slice(1));
+  syncRunDetailsFromUrl();
+}
+window.addEventListener("popstate", handleLocationChange);
+window.addEventListener("hashchange", handleLocationChange);
 setDashboardView(window.location.hash.slice(1));
 connectDevReload();
 csvInput.addEventListener("change", () => importFile(csvInput.files[0]));
+gpxImportButton.addEventListener("click", () => {
+  gpxInput.value = "";
+  gpxInput.click();
+});
+gpxInput.addEventListener("change", () => importGpxFiles([...gpxInput.files]));
 dashboardPeriod.addEventListener("change", refreshDashboard);
 rollingPeriod.addEventListener("change", refreshDashboard);
 
@@ -887,6 +1339,14 @@ try {
       }))
       : saved.runs.map((run) => ({ date: run.date, type: "Running" }));
     importedFileName = saved.fileName || "";
+    importedRoutes = Array.isArray(saved.routes) ? saved.routes.filter((route) =>
+      typeof route.date === "string"
+      && typeof route.category === "string"
+      && typeof route.fileName === "string"
+      && Array.isArray(route.points)
+      && route.points.length > 1
+      && route.points.every((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon)),
+    ) : [];
     const hasSavedActivityTypes = Array.isArray(saved.activities);
     if (saved.version !== 4 || saved.distanceUnit !== "m" || !hasSavedActivityTypes) {
       try {
@@ -895,6 +1355,7 @@ try {
           fileName: importedFileName,
           runs: importedRuns,
           activities: importedActivities,
+          routes: importedRoutes,
           distanceUnit: "m",
         }));
       } catch {
@@ -910,3 +1371,4 @@ try {
 } catch {
   showError("Saved activities could not be read. Please import the Garmin CSV again.");
 }
+syncRunDetailsFromUrl();

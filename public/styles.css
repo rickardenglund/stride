@@ -180,10 +180,11 @@ h1 span, .connect-content h2 span { color: var(--blue-2); }
 .runs-table tbody tr[data-run-index] { cursor: pointer; }
 .runs-table tbody tr[data-run-index]:hover td { background: rgba(90, 167, 223, .08); }
 .runs-table tbody tr:last-child td { border-bottom: 0; }
+.run-route-indicator { width: 18px; height: 18px; margin-left: 8px; vertical-align: middle; fill: none; stroke: #ef4444; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .run-detail-trigger { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; }
 .run-detail-trigger:hover, .run-detail-trigger:focus-visible { color: var(--blue-1); text-decoration-color: currentColor; }
 .run-detail-trigger:focus-visible { outline: 2px solid var(--blue-1); outline-offset: 3px; border-radius: 2px; }
-.run-detail-dialog { width: min(440px, calc(100vw - 32px)); padding: 22px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); color: var(--ink); box-shadow: 0 18px 60px rgba(0, 0, 0, .4); animation: run-dialog-enter .18s ease-out both; }
+.run-detail-dialog { position: absolute; width: min(552px, calc(100vw - 16px)); padding: 0; overflow: visible; border: 0; background: transparent; color: var(--ink); animation: run-dialog-enter .18s ease-out both; }
 .run-detail-dialog::backdrop { background: rgba(3, 10, 16, .7); backdrop-filter: blur(3px); animation: run-dialog-backdrop-enter .18s ease-out both; }
 .run-detail-dialog.is-closing { animation: run-dialog-exit .14s ease-in both; }
 .run-detail-dialog.is-closing::backdrop { animation: run-dialog-backdrop-exit .14s ease-in both; }
@@ -196,10 +197,43 @@ h1 span, .connect-content h2 span { color: var(--blue-2); }
 .run-detail-heading p { margin-top: 5px; color: var(--muted); font-size: 13px; }
 .run-detail-close { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--ink); font-size: 21px; line-height: 1; cursor: pointer; }
 .run-detail-close:hover { background: #1a3b52; }
+.run-detail-panel { width: min(440px, calc(100vw - 88px)); max-height: calc(100vh - 32px); overflow-y: auto; margin: auto; padding: 22px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); color: var(--ink); box-shadow: 0 18px 60px rgba(0, 0, 0, .4); }
+.run-detail-navigation { position: absolute; top: 50%; right: 0; left: 0; display: flex; justify-content: space-between; transform: translateY(-50%); pointer-events: none; }
+.run-detail-nav-button { width: 36px; height: 44px; padding: 0; border: 1px solid var(--line); border-radius: 7px; background: #101e29; color: var(--ink); font: 700 24px/1 Manrope, sans-serif; cursor: pointer; pointer-events: auto; }
+.run-detail-nav-button:hover:not(:disabled), .run-detail-nav-button:focus-visible { border-color: var(--blue-1); color: var(--blue-1); }
+.run-detail-nav-button:focus-visible { outline: 2px solid var(--blue-1); outline-offset: 2px; }
+.run-detail-nav-button:disabled { opacity: .45; cursor: not-allowed; }
 .run-detail-list { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 18px 0 0; }
 .run-detail-list > div { padding: 11px; border: 1px solid var(--line); border-radius: 6px; background: #101e29; }
 .run-detail-list dt { color: var(--muted); font-size: 11px; font-weight: 600; }
 .run-detail-list dd { margin: 5px 0 0; font: 700 17px Manrope, sans-serif; }
+.run-route-section { margin-top: 20px; }
+.run-route-section h3 { margin-bottom: 9px; font: 700 13px Manrope, sans-serif; }
+.run-route-chart { overflow: hidden; border-radius: 6px; background: #0c1821; }
+.run-route-chart svg { display: block; width: 100%; height: auto; }
+.run-route-chart polyline { fill: none; stroke: #ef4444; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.run-route-chart .run-route-start { fill: #58c27d; stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.run-route-chart .run-route-end { fill: #ef4444; stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.run-route-endpoint-label { fill: #edf6ff; font: 700 10px Manrope, sans-serif; paint-order: stroke; stroke: #0c1821; stroke-width: 3px; stroke-linejoin: round; }
+.run-route-hover-marker, .heart-rate-hover-marker { fill: #f6c85f; stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
+#run-route-filename { margin-top: 7px; color: var(--muted); font-size: 11px; }
+.run-heart-rate-section { margin-top: 18px; }
+.run-heart-rate-section h3 { margin-bottom: 9px; font: 700 13px Manrope, sans-serif; }
+.run-heart-rate-chart { overflow: hidden; border-radius: 6px; background: #0c1821; }
+.run-heart-rate-chart svg { display: block; width: 100%; height: auto; }
+.run-heart-rate-chart polyline { fill: none; stroke: #58a7df; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.heart-rate-hover-line { stroke: #f6c85f; stroke-width: 1.5; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.run-heart-rate-grid { stroke: #294355; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.heart-rate-label, .heart-rate-axis-label { fill: #b9c9d5; font: 11px Manrope, sans-serif; }
+.run-elevation-section { margin-top: 18px; }
+.run-elevation-section h3 { margin-bottom: 9px; font: 700 13px Manrope, sans-serif; }
+.run-elevation-chart { overflow: hidden; border-radius: 6px; background: #0c1821; }
+.run-elevation-chart svg { display: block; width: 100%; height: auto; }
+.run-elevation-chart polyline { fill: none; stroke: #f6c85f; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.run-profile-hover-marker { fill: #f6c85f; stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.run-profile-hover-line { stroke: #f6c85f; stroke-width: 1.5; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.run-profile-grid { stroke: #294355; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.run-profile-label, .run-profile-axis-label { fill: #b9c9d5; font: 11px Manrope, sans-serif; }
 @media (prefers-reduced-motion: reduce) {
   .run-detail-dialog, .run-detail-dialog::backdrop, .run-detail-dialog.is-closing,
   .run-detail-dialog.is-closing::backdrop { animation-duration: 0.01ms; }
