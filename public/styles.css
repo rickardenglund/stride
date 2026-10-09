@@ -210,6 +210,9 @@ h1 span, .connect-content h2 span { color: var(--blue-2); }
 .run-detail-list > div { padding: 11px; border: 1px solid var(--line); border-radius: 6px; background: #101e29; }
 .run-detail-list dt { color: var(--muted); font-size: 11px; font-weight: 600; }
 .run-detail-list dd { margin: 5px 0 0; font: 700 17px Manrope, sans-serif; }
+.run-garmin-link { margin-top: 16px; font-size: 13px; }
+.run-garmin-link a { color: var(--blue-1); text-decoration: underline; text-underline-offset: 3px; }
+.run-garmin-link a:hover, .run-garmin-link a:focus-visible { color: var(--blue-2); }
 .run-route-section { margin-top: 20px; }
 .run-route-section h3 { margin-bottom: 9px; font: 700 13px Manrope, sans-serif; }
 .run-route-chart { overflow: hidden; border-radius: 6px; background: #0c1821; }

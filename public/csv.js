@@ -130,6 +130,7 @@ export function parseGarminCsv(text, fallbackUnit = "km") {
     /^(?:(?:avg|average)\.? )?pace(?:\s*\(.*\))?$/.test(header),
   );
   const heartRateIndex = headers.findIndex((header) => /^(?:avg|average)\.? hr$/.test(header));
+  const activityIdIndex = findColumn(["activity id", "activityid"]);
   if (typeIndex === -1 || dateIndex === -1 || distanceIndex === -1) {
     throw new Error("Could not find Activity Type, Date, and Distance columns. Choose the Garmin Connect Activities CSV.");
   }
@@ -170,6 +171,9 @@ export function parseGarminCsv(text, fallbackUnit = "km") {
       durationSeconds,
       paceSecondsPerKm,
       averageHeartRate: Number.isFinite(averageHeartRate) ? averageHeartRate : null,
+      ...(activityIdIndex !== -1 && (row[activityIdIndex] || "").trim()
+        ? { activityId: (row[activityIdIndex] || "").trim() }
+        : {}),
     };
     activities.push(activity);
 

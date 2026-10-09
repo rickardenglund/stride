@@ -24,6 +24,7 @@ const runDetailDialog = document.querySelector("#run-detail-dialog");
 const runDetailTitle = document.querySelector("#run-detail-title");
 const runDetailDate = document.querySelector("#run-detail-date");
 const runDetailList = document.querySelector("#run-detail-list");
+const runGarminLink = document.querySelector("#run-garmin-link");
 const runDetailClose = document.querySelector("#run-detail-close");
 const runDetailPrevious = document.querySelector("#run-detail-previous");
 const runDetailNext = document.querySelector("#run-detail-next");
@@ -614,6 +615,14 @@ function showRunDetails(run, updateUrl = false) {
   );
   const route = matchingRoutes.length === 1 ? matchingRoutes[0] : null;
   runDetailTitle.textContent = route?.name || run.type || "Running";
+  runGarminLink.hidden = Boolean(route);
+  const garminActivityLink = runGarminLink.querySelector("a");
+  garminActivityLink.href = run.activityId
+    ? `https://connect.garmin.com/modern/activity/${encodeURIComponent(run.activityId)}`
+    : "https://connect.garmin.com/modern/activities";
+  garminActivityLink.textContent = run.activityId
+    ? "Open this activity in Garmin Connect ↗"
+    : "Browse activities in Garmin Connect ↗";
   selectedRouteCoordinates = route ? getRouteSvgCoordinates(route.points) : [];
   runRouteSection.hidden = !route;
   runRouteChart.innerHTML = route ? renderRouteSvg(route.points) : "";

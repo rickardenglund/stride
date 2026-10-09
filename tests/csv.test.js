@@ -115,6 +115,15 @@ test("parses the Garmin CSV row format from the user's export", () => {
   assert.equal(result.runs[0].paceSecondsPerKm, 393);
 });
 
+test("preserves Garmin activity IDs when present in the CSV", () => {
+  const result = parseGarminCsv([
+    "Activity Type,Date,Distance,Activity ID",
+    "Running,2026-10-08,5,123456789",
+  ].join("\n"));
+  assert.equal(result.runs[0].activityId, "123456789");
+  assert.equal(result.activities[0].activityId, "123456789");
+});
+
 test("imports non-running duration and average heart rate for activity calendar", () => {
   const result = parseGarminCsv([
     "Activity Type,Date,Distance,Time,Avg HR",
