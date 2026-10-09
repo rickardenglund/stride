@@ -1242,12 +1242,13 @@ function setDashboardView(view, updateUrl = false) {
 
 async function connectDevReload() {
   try {
-    const response = await fetch("/__dev/status");
+    const response = await fetch(new URL("__dev/status", window.location.href));
+    if (response.status === 404) return;
     if (!response.ok) throw new Error(`Development reload status failed: ${response.status}`);
     const { enabled } = await response.json();
     if (!enabled) return;
 
-    const events = new EventSource("/__dev/events");
+    const events = new EventSource(new URL("__dev/events", window.location.href));
     let connected = false;
     let reconnecting = false;
     events.addEventListener("open", () => {
