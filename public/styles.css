@@ -165,6 +165,7 @@ h1 span, .connect-content h2 span { color: var(--blue-2); }
 .weekday-table { width: 100%; min-width: 600px; border-collapse: separate; border-spacing: 3px; text-align: center; }
 .weekday-table th { color: var(--muted); font-size: 11px; font-weight: 700; padding: 8px 6px; }
 .weekday-table th[scope="row"] { width: 150px; text-align: left; }
+.weekday-total-row th, .weekday-total-row td { border-top: 1px solid var(--line); font-weight: 700; }
 .weekday-activity-name { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
 .weekday-table td { min-width: 45px; padding: 8px 5px; border-radius: 4px; color: #edf6ff; font-size: 12px; font-variant-numeric: tabular-nums; }
 .weekday-table td.level-0 { background: #142531; color: #91a5b7; }

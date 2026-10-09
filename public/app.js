@@ -286,15 +286,32 @@ function renderWeekdayFrequency(activities, period) {
   document.querySelector("#weekday-description").textContent = period === "all"
     ? `Activity counts across all ${periodActivities.length} imported activities, grouped by weekday`
     : `Activity counts for the last ${period} days, grouped by weekday (${periodActivities.length} activities)`;
-  weekdayFrequency.innerHTML = counts.size ? [...counts.entries()].map(([category, weekdayCounts]) => {
-    const maximum = Math.max(...weekdayCounts);
-    const cells = weekdayCounts.map((count, weekday) => {
+  if (!counts.size) {
+    weekdayFrequency.innerHTML = '<tr><td class="weekday-empty" colspan="8">No activities in this period.</td></tr>';
+    return;
+  }
+
+  const allCounts = Array(weekdays.length).fill(0);
+  for (const categoryCounts of counts.values()) {
+    categoryCounts.forEach((count, weekday) => {
+      allCounts[weekday] += count;
+    });
+  }
+  const renderRow = (label, rowCounts, category = null) => {
+    const maximum = Math.max(...rowCounts);
+    const cells = rowCounts.map((count, weekday) => {
       const level = count ? Math.max(1, Math.ceil((count / maximum) * 4)) : 0;
-      const accessibleCount = `${activityCategories[category].label} on ${weekdays[weekday]}: ${count} ${count === 1 ? "activity" : "activities"}`;
+      const accessibleCount = `${label} on ${weekdays[weekday]}: ${count} ${count === 1 ? "activity" : "activities"}`;
       return `<td class="weekday-frequency-cell level-${level}" aria-label="${accessibleCount}" title="${accessibleCount}">${count || "—"}</td>`;
     }).join("");
-    return `<tr><th scope="row"><span class="weekday-activity-name"><i class="calendar-legend-dot marker-${category}" aria-hidden="true"></i>${activityCategories[category].label}</span></th>${cells}</tr>`;
-  }).join("") : '<tr><td class="weekday-empty" colspan="8">No activities in this period.</td></tr>';
+    const marker = category ? `<i class="calendar-legend-dot marker-${category}" aria-hidden="true"></i>` : "";
+    return `<tr${category ? "" : ' class="weekday-total-row"'}><th scope="row"><span class="weekday-activity-name">${marker}${label}</span></th>${cells}</tr>`;
+  };
+
+  const rows = [...counts.entries()]
+    .map(([category, categoryCounts]) => renderRow(activityCategories[category].label, categoryCounts, category));
+  rows.push(renderRow("All activities", allCounts));
+  weekdayFrequency.innerHTML = rows.join("");
 }
 
 function renderRunList(runs) {
@@ -490,6 +507,24 @@ function setImportedState() {
   }
 }
 
+function setDashboardView(view, updateUrl = false) {
+  const selectedButton = [...dashboardNav.querySelectorAll(".dashboard-nav-item")]
+    .find((button) => button.dataset.view === view);
+  const activeButton = selectedButton || dashboardNav.querySelector('.dashboard-nav-item[data-view="calendar"]');
+
+  for (const button of dashboardNav.querySelectorAll(".dashboard-nav-item")) {
+    const isSelected = button === activeButton;
+    button.setAttribute("aria-selected", String(isSelected));
+    document.querySelector(`#${button.getAttribute("aria-controls")}`).hidden = !isSelected;
+  }
+
+  const activeView = activeButton.dataset.view;
+  dashboard.dataset.activeView = activeView;
+  if (updateUrl && window.location.hash !== `#${activeView}`) {
+    window.history.pushState(null, "", `#${activeView}`);
+  }
+}
+
 async function importFile(file) {
   if (!file) return;
   notice.hidden = true;
@@ -526,14 +561,11 @@ for (const button of importButtons) {
 dashboardNav.addEventListener("click", (event) => {
   const button = event.target.closest(".dashboard-nav-item");
   if (!button) return;
-  const selectedView = button.dataset.view;
-  for (const item of dashboardNav.querySelectorAll(".dashboard-nav-item")) {
-    const isSelected = item === button;
-    item.setAttribute("aria-selected", String(isSelected));
-    document.querySelector(`#${item.getAttribute("aria-controls")}`).hidden = !isSelected;
-  }
-  dashboard.dataset.activeView = selectedView;
+  setDashboardView(button.dataset.view, true);
 });
+window.addEventListener("popstate", () => setDashboardView(window.location.hash.slice(1)));
+window.addEventListener("hashchange", () => setDashboardView(window.location.hash.slice(1)));
+setDashboardView(window.location.hash.slice(1));
 csvInput.addEventListener("change", () => importFile(csvInput.files[0]));
 rangeSelect.addEventListener("change", refreshDashboard);
 rollingPeriod.addEventListener("change", refreshDashboard);
