@@ -88,7 +88,9 @@ h1 span, .connect-content h2 span { color: var(--blue-2); }
 .calendar-table td.activity-climbing { background: #efeafb; color: #4f3d7d; }
 .calendar-table td.activity-yoga { background: #e9f3f7; color: #2d5e71; }
 .calendar-table td.activity-other, .calendar-table td.activity-mixed { background: #eef2f4; color: #303a34; }
+.calendar-table td.activity-mixed { background-image: var(--activity-stripes); }
 .calendar-markers { display: flex; justify-content: center; gap: 3px; margin: 2px auto 0; }
+.calendar-marker { box-shadow: 0 0 0 1px #0d1720; }
 .calendar-tooltip { display: none; position: absolute; z-index: 10; top: calc(100% + 5px); left: 50%; width: max-content; min-width: 170px; max-width: 230px; transform: translateX(-50%); padding: 10px 12px; border: 1px solid #39443d; border-radius: 6px; background: #fff; color: #1f2925; text-align: left; font-size: 12px; font-weight: 500; line-height: 1.55; box-shadow: 0 5px 16px rgba(29, 47, 69, 0.15); }
 .calendar-tooltip strong, .calendar-tooltip span { display: block; }
 .calendar-tooltip strong { margin-bottom: 3px; }
@@ -208,15 +210,16 @@ body { background: var(--paper); color: var(--ink); }
   }
   .calendar-table td { background: #1a2b39; color: var(--ink); }
   .calendar-table td.calendar-empty { background: transparent; }
-  .calendar-table td.activity-running { background: rgba(95, 167, 221, 0.18); color: #cfe9ff; }
-  .calendar-table td.activity-trail { background: rgba(213, 162, 122, 0.18); color: #f3d5b8; }
-  .calendar-table td.activity-cycling { background: rgba(90, 167, 223, 0.18); color: #d5ecff; }
-  .calendar-table td.activity-walking { background: rgba(124, 150, 194, 0.18); color: #dfe8ff; }
-  .calendar-table td.activity-swimming { background: rgba(101, 175, 204, 0.18); color: #d3f3ff; }
-  .calendar-table td.activity-strength { background: rgba(199, 152, 110, 0.18); color: #f5d8b8; }
-  .calendar-table td.activity-climbing { background: rgba(160, 116, 193, 0.18); color: #e7d7ff; }
-  .calendar-table td.activity-yoga { background: rgba(116, 165, 178, 0.18); color: #dff9ff; }
-  .calendar-table td.activity-other, .calendar-table td.activity-mixed { background: rgba(166, 180, 194, 0.12); color: #e4edf6; }
+  .calendar-table td.activity-running { background: #173c5a; color: #a9dcff; }
+  .calendar-table td.activity-trail { background: #493626; color: #f2c49e; }
+  .calendar-table td.activity-cycling { background: #16463f; color: #8ce4cf; }
+  .calendar-table td.activity-walking { background: #3b315e; color: #d0bdff; }
+  .calendar-table td.activity-swimming { background: #174454; color: #8bdcf2; }
+  .calendar-table td.activity-strength { background: #503233; color: #ffaaa0; }
+  .calendar-table td.activity-climbing { background: #514522; color: #f1d778; }
+  .calendar-table td.activity-yoga { background: #50304a; color: #f3a8d2; }
+  .calendar-table td.activity-other, .calendar-table td.activity-mixed { background: #344451; color: #e4edf6; }
+  .calendar-table td.activity-mixed { background-image: var(--activity-stripes); }
   .connect-art { background: #101d2a; }
   .art-circle { border-color: rgba(127, 180, 220, 0.22); }
   .art-circle-inner { background: rgba(18, 35, 48, 0.9); }
@@ -229,16 +232,24 @@ body { background: var(--paper); color: var(--ink); }
   .runs-table td { border-bottom-color: var(--line); }
   .runs-table td[data-label="Pace"], .runs-empty { color: var(--muted) !important; }
   .live-pill { color: #a9dcff; background: #12344b; border-color: #5aa7df; }
-  .run-type.activity-running { color: #d5ecff; background: #174a6d; }
-  .run-type.activity-trail { color: #ffe4cc; background: #62452f; }
-  .run-type.activity-cycling { color: #d5ecff; background: #1d5277; }
-  .run-type.activity-walking { color: #e8edff; background: #3d4c70; }
-  .run-type.activity-swimming { color: #dcf7ff; background: #155267; }
-  .run-type.activity-strength { color: #ffe8cf; background: #62452f; }
-  .run-type.activity-climbing { color: #f0e5ff; background: #493d68; }
-  .run-type.activity-yoga { color: #e4faff; background: #27515e; }
+  .run-type.activity-running { color: #a9dcff; background: #173c5a; }
+  .run-type.activity-trail { color: #f2c49e; background: #493626; }
+  .run-type.activity-cycling { color: #8ce4cf; background: #16463f; }
+  .run-type.activity-walking { color: #d0bdff; background: #3b315e; }
+  .run-type.activity-swimming { color: #8bdcf2; background: #174454; }
+  .run-type.activity-strength { color: #ffaaa0; background: #503233; }
+  .run-type.activity-climbing { color: #f1d778; background: #514522; }
+  .run-type.activity-yoga { color: #f3a8d2; background: #50304a; }
   .run-type.activity-other { color: #f0f6fc; background: #344451; }
-  .calendar-legend-dot, .marker-running, .marker-trail, .marker-cycling, .marker-walking, .marker-swimming, .marker-strength, .marker-climbing, .marker-yoga, .marker-other { filter: brightness(1.1); }
+  .marker-running { background: #79c8ff; }
+  .marker-trail { background: #e6a875; }
+  .marker-cycling { background: #58d6b8; }
+  .marker-walking { background: #ad91ff; }
+  .marker-swimming { background: #5bc7e5; }
+  .marker-strength { background: #ff8073; }
+  .marker-climbing { background: #e8c94f; }
+  .marker-yoga { background: #e987bd; }
+  .marker-other { background: #b4c0cc; }
   .chart-footer { border-top-color: var(--line); color: var(--muted); }
 
 @media (prefers-contrast: more) {
@@ -262,15 +273,16 @@ body { background: var(--paper); color: var(--ink); }
   .runs-table th { background: #1b3445; }
   .calendar-table td { border: 1px solid #617c91; }
   .calendar-table td.calendar-empty { border-color: transparent; }
-  .calendar-table td.activity-running { color: #e0f2ff; background: #174a6d; }
-  .calendar-table td.activity-trail { color: #ffe4cc; background: #62452f; }
-  .calendar-table td.activity-cycling { color: #e0f2ff; background: #1d5277; }
-  .calendar-table td.activity-walking { color: #e8edff; background: #3d4c70; }
-  .calendar-table td.activity-swimming { color: #dcf7ff; background: #155267; }
-  .calendar-table td.activity-strength { color: #ffe8cf; background: #62452f; }
-  .calendar-table td.activity-climbing { color: #f0e5ff; background: #493d68; }
-  .calendar-table td.activity-yoga { color: #e4faff; background: #27515e; }
+  .calendar-table td.activity-running { color: #c6eaff; background: #205577; }
+  .calendar-table td.activity-trail { color: #ffe0c2; background: #66482f; }
+  .calendar-table td.activity-cycling { color: #b5f5e6; background: #1d6355; }
+  .calendar-table td.activity-walking { color: #e0d4ff; background: #514276; }
+  .calendar-table td.activity-swimming { color: #c6f3ff; background: #1c6178; }
+  .calendar-table td.activity-strength { color: #ffd1ca; background: #704346; }
+  .calendar-table td.activity-climbing { color: #fff0a6; background: #6d5b25; }
+  .calendar-table td.activity-yoga { color: #ffd2eb; background: #704464; }
   .calendar-table td.activity-other, .calendar-table td.activity-mixed { color: #f0f6fc; background: #344451; }
+  .calendar-table td.activity-mixed { background-image: var(--activity-stripes); }
   .action-button:focus-visible, .range-select select:focus-visible,
   .calendar-nav:focus-visible, .calendar-table td:focus-visible { outline-color: #fff; }
 }

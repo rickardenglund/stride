@@ -22,15 +22,15 @@ let importedFileName = "";
 let calendarMonth = null;
 
 const activityCategories = {
-  running: { label: "Running", color: "#1d4f7a", background: "#dfeef8" },
-  trail: { label: "Trail running", color: "#8b5a39", background: "#f3e5d9" },
-  cycling: { label: "Cycling", color: "#2c7bb8", background: "#dfe9f7" },
-  walking: { label: "Walking & hiking", color: "#3a5d8b", background: "#e7edf9" },
-  swimming: { label: "Swimming", color: "#0d5c73", background: "#dff4fb" },
-  strength: { label: "Strength", color: "#865528", background: "#f5e7da" },
-  climbing: { label: "Climbing", color: "#4f3d7d", background: "#efeafb" },
-  yoga: { label: "Yoga", color: "#2d5e71", background: "#e9f3f7" },
-  other: { label: "Other", color: "#303a34", background: "#eef2f4" },
+  running: { label: "Running", color: "#1d4f7a", background: "#dfeef8", stripe: "#244760" },
+  trail: { label: "Trail running", color: "#8b5a39", background: "#f3e5d9", stripe: "#5a4635" },
+  cycling: { label: "Cycling", color: "#2c7bb8", background: "#dfe9f7", stripe: "#214b44" },
+  walking: { label: "Walking & hiking", color: "#3a5d8b", background: "#e7edf9", stripe: "#41395a" },
+  swimming: { label: "Swimming", color: "#0d5c73", background: "#dff4fb", stripe: "#224956" },
+  strength: { label: "Strength", color: "#865528", background: "#f5e7da", stripe: "#573b3b" },
+  climbing: { label: "Climbing", color: "#4f3d7d", background: "#efeafb", stripe: "#5a512f" },
+  yoga: { label: "Yoga", color: "#2d5e71", background: "#e9f3f7", stripe: "#57394f" },
+  other: { label: "Other", color: "#303a34", background: "#eef2f4", stripe: "#46515c" },
 };
 
 function categoryForActivity(type) {
@@ -346,6 +346,9 @@ function renderCalendar(activities, runs) {
     ].filter(Boolean).join(", ");
     const description = `${fullDate}${activity ? `: ${daySummary} — ${categories.map((category) => activityCategories[category].label).join(", ")}` : ": no activity"}`;
     const markers = categories.map((category) => `<i class="calendar-marker marker-${category}" aria-hidden="true"></i>`).join("");
+    const stripeStyle = categories.length > 1
+      ? ` style="--activity-stripes: repeating-linear-gradient(135deg, ${categories.map((category, stripeIndex) => `${activityCategories[category].stripe} ${stripeIndex * 8}px ${(stripeIndex + 1) * 8}px`).join(", ")})"`
+      : "";
     const runTooltip = `<span class="calendar-tooltip" aria-hidden="true"><strong>${escapeHtml(fullDate)}</strong>${activityDetails || "<span>No activity details</span>"}</span>`;
     const activityAccessibleDetails = (activity?.items || []).map((item) => {
       const category = categoryForActivity(item.type);
@@ -355,7 +358,7 @@ function renderCalendar(activities, runs) {
     }).join(" ");
     const accessibleDescription = `${description}. ${activityAccessibleDetails}`;
     dayCells.push(
-      `<td class="${activity ? `calendar-active${categories.length === 1 ? ` activity-${categories[0]}` : " activity-mixed"}` : ""}"${activity ? ` data-activity-categories="${categories.join(" ")}"` : ""} title="${description}" aria-label="${escapeHtml(accessibleDescription)}"${activity ? ' tabindex="0"' : ""}><span>${day}</span>${markers ? `<span class="calendar-markers">${markers}</span>` : ""}${activity ? runTooltip : ""}</td>`,
+      `<td class="${activity ? `calendar-active${categories.length === 1 ? ` activity-${categories[0]}` : " activity-mixed"}` : ""}"${activity ? ` data-activity-categories="${categories.join(" ")}"` : ""}${stripeStyle} title="${description}" aria-label="${escapeHtml(accessibleDescription)}"${activity ? ' tabindex="0"' : ""}><span>${day}</span>${markers ? `<span class="calendar-markers">${markers}</span>` : ""}${activity ? runTooltip : ""}</td>`,
     );
   }
 
