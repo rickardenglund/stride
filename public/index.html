@@ -13,21 +13,29 @@
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <a class="brand" href="/" aria-label="Stride home">
-          <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
-          <span>stride<span class="brand-period">.</span></span>
-        </a>
         <nav class="dashboard-nav" id="dashboard-nav" aria-label="Dashboard sections" hidden>
           <button class="dashboard-nav-item" type="button" data-view="calendar" aria-controls="calendar-view" aria-selected="true">Calendar</button>
           <button class="dashboard-nav-item" type="button" data-view="runs" aria-controls="runs-view" aria-selected="false">Runs</button>
           <button class="dashboard-nav-item" type="button" data-view="weekday" aria-controls="weekday-view" aria-selected="false">Frequencies</button>
         </nav>
-        <div class="topbar-right">
-          <span class="sync-label"><span class="status-dot"></span><span id="connection-label">No activities imported</span></span>
-          <button class="action-button" id="import-button" type="button">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
-            Import CSV
-          </button>
+        <div class="topbar-controls">
+          <label class="topbar-period range-select" id="dashboard-period-control" hidden>
+            <span>Time period</span>
+            <select id="dashboard-period" aria-label="Dashboard time period">
+              <option value="30">Last 30 days</option>
+              <option value="90" selected>Last 90 days</option>
+              <option value="180">Last 6 months</option>
+              <option value="365">Last year</option>
+              <option value="all">All imported</option>
+            </select>
+          </label>
+          <div class="topbar-actions">
+            <span class="sync-label"><span class="status-dot"></span><span id="connection-label">No activities imported</span></span>
+            <button class="action-button" id="import-button" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+              Import CSV
+            </button>
+          </div>
         </div>
       </header>
 
@@ -66,15 +74,6 @@
               </div>
               <div class="chart-options">
                 <div class="chart-selectors">
-                  <label class="range-select">
-                    <span>Time period</span>
-                    <select id="range-select" aria-label="Chart time period">
-                      <option value="30">Last 30 days</option>
-                      <option value="90" selected>Last 90 days</option>
-                      <option value="180">Last 6 months</option>
-                      <option value="365">Last year</option>
-                    </select>
-                  </label>
                   <label class="range-select">
                     <span>Rolling window</span>
                     <select id="rolling-period" aria-label="Rolling average and total length">
@@ -121,16 +120,6 @@
                   <h2 id="frequency-timeline-title">Activities over time</h2>
                   <p id="frequency-timeline-description">Activity counts in adaptive time intervals</p>
                 </div>
-                <label class="range-select weekday-range-select">
-                  <span>Time period</span>
-                  <select id="weekday-period" aria-label="Activity frequency time period">
-                    <option value="30">Last 30 days</option>
-                    <option value="90" selected>Last 90 days</option>
-                    <option value="180">Last 6 months</option>
-                    <option value="365">Last year</option>
-                    <option value="all">All imported</option>
-                  </select>
-                </label>
               </div>
               <div id="activity-frequency-chart" class="activity-frequency-chart"></div>
             </article>

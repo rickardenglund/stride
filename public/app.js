@@ -4,7 +4,8 @@ const dashboard = document.querySelector("#dashboard");
 const dashboardNav = document.querySelector("#dashboard-nav");
 const connectState = document.querySelector("#connect-state");
 const notice = document.querySelector("#notice");
-const rangeSelect = document.querySelector("#range-select");
+const dashboardPeriod = document.querySelector("#dashboard-period");
+const dashboardPeriodControl = document.querySelector("#dashboard-period-control");
 const rollingPeriod = document.querySelector("#rolling-period");
 const connectionLabel = document.querySelector("#connection-label");
 const statusDot = document.querySelector(".status-dot");
@@ -16,7 +17,6 @@ const calendarNext = document.querySelector("#calendar-next");
 const runsList = document.querySelector("#runs-list");
 const runsSummary = document.querySelector("#runs-summary");
 const weekdayFrequency = document.querySelector("#weekday-frequency");
-const weekdayPeriod = document.querySelector("#weekday-period");
 const activityFrequencyChart = document.querySelector("#activity-frequency-chart");
 const chart = document.querySelector("#chart");
 const importButtons = [document.querySelector("#import-button"), document.querySelector("#import-cta")];
@@ -266,12 +266,21 @@ function renderRuns(runs, days) {
   const totals = new Map();
   for (const run of runs) totals.set(run.date, (totals.get(run.date) || 0) + run.distance / 1000);
   renderCalendar(importedActivities, runs);
-  renderWeekdayFrequency(importedActivities, weekdayPeriod.value);
+  renderWeekdayFrequency(importedActivities, dashboardPeriod.value);
 
   const windowDays = Number(rollingPeriod.value);
   const lookback = windowDays - 1;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  if (days === "all") {
+    const earliestRun = runs.reduce((earliest, run) => run.date < earliest ? run.date : earliest, runs[0].date);
+    const [year, month, day] = earliestRun.split("-").map(Number);
+    const start = new Date(year, month - 1, day);
+    days = Math.floor((Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+      - Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) / 86_400_000) + 1;
+  } else {
+    days = Number(days);
+  }
   const dates = Array.from({ length: days + lookback }, (_, index) => {
     const date = new Date(today);
     date.setDate(today.getDate() - (days + lookback - 1) + index);
@@ -294,11 +303,12 @@ function renderRuns(runs, days) {
   const visibleRolling = rollingAverage.slice(lookback);
   const visibleTotals = rollingTotals.slice(lookback);
   const visibleDates = dates.slice(lookback);
+  const timePeriodDescription = dashboardPeriod.value === "all" ? "all imported dates" : `the last ${days} days`;
   const periodRuns = runs
     .filter((run) => run.date >= dateKey(visibleDates[0]) && run.date <= dateKey(visibleDates.at(-1)))
     .sort((left, right) => right.date.localeCompare(left.date));
   document.querySelector("#chart").innerHTML = makeChart(visibleDaily, visibleDates, visibleRolling, visibleTotals, windowDays, windowDays);
-  document.querySelector("#chart").setAttribute("aria-label", `Running distance with ${windowDays}-day rolling average and ${windowDays}-day rolling total for the last ${days} days`);
+  document.querySelector("#chart").setAttribute("aria-label", `Running distance with ${windowDays}-day rolling average and ${windowDays}-day rolling total for ${timePeriodDescription}`);
   document.querySelector("#average-legend-label").textContent = `${windowDays}-day average`;
   document.querySelector("#total-legend-label").textContent = `${windowDays}-day total`;
   document.querySelector("#chart-range").textContent = `${formatDate(visibleDates[0], { month: "short", day: "numeric" }).toUpperCase()} — ${formatDate(visibleDates.at(-1), { month: "short", day: "numeric" }).toUpperCase()}`;
@@ -633,7 +643,7 @@ function dateKey(date) {
 
 function refreshDashboard() {
   if (importedRuns.length === 0) return;
-  renderRuns(importedRuns, Number(rangeSelect.value));
+  renderRuns(importedRuns, dashboardPeriod.value);
 }
 
 calendarPrev.addEventListener("click", () => {
@@ -649,6 +659,7 @@ function setImportedState() {
   const hasRuns = importedRuns.length > 0;
   dashboard.hidden = !hasRuns;
   dashboardNav.hidden = !hasRuns;
+  dashboardPeriodControl.hidden = !hasRuns;
   connectState.hidden = hasRuns;
   statusDot.classList.toggle("connected", hasRuns);
   connectionLabel.textContent = hasRuns
@@ -744,9 +755,8 @@ window.addEventListener("hashchange", () => setDashboardView(window.location.has
 setDashboardView(window.location.hash.slice(1));
 connectDevReload();
 csvInput.addEventListener("change", () => importFile(csvInput.files[0]));
-rangeSelect.addEventListener("change", refreshDashboard);
+dashboardPeriod.addEventListener("change", refreshDashboard);
 rollingPeriod.addEventListener("change", refreshDashboard);
-weekdayPeriod.addEventListener("change", () => renderWeekdayFrequency(importedActivities, weekdayPeriod.value));
 
 try {
   const saved = JSON.parse(localStorage.getItem("stride-garmin-runs") || "null");
