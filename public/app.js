@@ -1,12 +1,11 @@
 import { normalizeStoredRuns, parseGarminCsv } from "./csv.js";
 
 const dashboard = document.querySelector("#dashboard");
+const dashboardNav = document.querySelector("#dashboard-nav");
 const connectState = document.querySelector("#connect-state");
 const notice = document.querySelector("#notice");
 const rangeSelect = document.querySelector("#range-select");
-const averagePeriod = document.querySelector("#average-period");
-const totalPeriod = document.querySelector("#total-period");
-const distanceUnit = document.querySelector("#distance-unit");
+const rollingPeriod = document.querySelector("#rolling-period");
 const connectionLabel = document.querySelector("#connection-label");
 const statusDot = document.querySelector(".status-dot");
 const csvInput = document.querySelector("#csv-input");
@@ -224,9 +223,8 @@ function renderRuns(runs, days) {
   renderCalendar(importedActivities, runs);
   renderWeekdayFrequency(importedActivities, weekdayPeriod.value);
 
-  const averageDays = Number(averagePeriod.value);
-  const totalDays = Number(totalPeriod.value);
-  const lookback = Math.max(averageDays, totalDays) - 1;
+  const windowDays = Number(rollingPeriod.value);
+  const lookback = windowDays - 1;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const dates = Array.from({ length: days + lookback }, (_, index) => {
@@ -239,12 +237,12 @@ function renderRuns(runs, days) {
     return totals.get(key) || 0;
   });
   const rollingAverage = daily.map((_, index) => {
-    const start = Math.max(0, index - averageDays + 1);
+    const start = Math.max(0, index - windowDays + 1);
     const sample = daily.slice(start, index + 1);
-    return sample.reduce((sum, distance) => sum + distance, 0) / averageDays;
+    return sample.reduce((sum, distance) => sum + distance, 0) / windowDays;
   });
   const rollingTotals = daily.map((_, index) => {
-    const start = Math.max(0, index - totalDays + 1);
+    const start = Math.max(0, index - windowDays + 1);
     return daily.slice(start, index + 1).reduce((sum, distance) => sum + distance, 0);
   });
   const visibleDaily = daily.slice(lookback);
@@ -254,10 +252,10 @@ function renderRuns(runs, days) {
   const periodRuns = runs
     .filter((run) => run.date >= dateKey(visibleDates[0]) && run.date <= dateKey(visibleDates.at(-1)))
     .sort((left, right) => right.date.localeCompare(left.date));
-  document.querySelector("#chart").innerHTML = makeChart(visibleDaily, visibleDates, visibleRolling, visibleTotals, averageDays, totalDays);
-  document.querySelector("#chart").setAttribute("aria-label", `Running distance with ${averageDays}-day rolling average and ${totalDays}-day rolling total for the last ${days} days`);
-  document.querySelector("#average-legend-label").textContent = `${averageDays}-day average`;
-  document.querySelector("#total-legend-label").textContent = `${totalDays}-day total`;
+  document.querySelector("#chart").innerHTML = makeChart(visibleDaily, visibleDates, visibleRolling, visibleTotals, windowDays, windowDays);
+  document.querySelector("#chart").setAttribute("aria-label", `Running distance with ${windowDays}-day rolling average and ${windowDays}-day rolling total for the last ${days} days`);
+  document.querySelector("#average-legend-label").textContent = `${windowDays}-day average`;
+  document.querySelector("#total-legend-label").textContent = `${windowDays}-day total`;
   document.querySelector("#chart-range").textContent = `${formatDate(visibleDates[0], { month: "short", day: "numeric" }).toUpperCase()} — ${formatDate(visibleDates.at(-1), { month: "short", day: "numeric" }).toUpperCase()}`;
   renderRunList(periodRuns);
 }
@@ -480,6 +478,7 @@ calendarNext.addEventListener("click", () => {
 function setImportedState() {
   const hasRuns = importedRuns.length > 0;
   dashboard.hidden = !hasRuns;
+  dashboardNav.hidden = !hasRuns;
   connectState.hidden = hasRuns;
   statusDot.classList.toggle("connected", hasRuns);
   connectionLabel.textContent = hasRuns
@@ -495,7 +494,7 @@ async function importFile(file) {
   if (!file) return;
   notice.hidden = true;
   try {
-    const { runs, activities } = parseGarminCsv(await file.text(), distanceUnit.value);
+    const { runs, activities } = parseGarminCsv(await file.text(), "km");
     importedRuns = runs;
     importedActivities = activities;
     importedFileName = file.name;
@@ -524,10 +523,20 @@ for (const button of importButtons) {
     csvInput.click();
   });
 }
+dashboardNav.addEventListener("click", (event) => {
+  const button = event.target.closest(".dashboard-nav-item");
+  if (!button) return;
+  const selectedView = button.dataset.view;
+  for (const item of dashboardNav.querySelectorAll(".dashboard-nav-item")) {
+    const isSelected = item === button;
+    item.setAttribute("aria-selected", String(isSelected));
+    document.querySelector(`#${item.getAttribute("aria-controls")}`).hidden = !isSelected;
+  }
+  dashboard.dataset.activeView = selectedView;
+});
 csvInput.addEventListener("change", () => importFile(csvInput.files[0]));
 rangeSelect.addEventListener("change", refreshDashboard);
-averagePeriod.addEventListener("change", refreshDashboard);
-totalPeriod.addEventListener("change", refreshDashboard);
+rollingPeriod.addEventListener("change", refreshDashboard);
 weekdayPeriod.addEventListener("change", () => renderWeekdayFrequency(importedActivities, weekdayPeriod.value));
 
 try {

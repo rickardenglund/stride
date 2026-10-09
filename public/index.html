@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#0d1720">
-    <title>Stride — your running, in rhythm</title>
+    <title>Stride</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -17,6 +17,11 @@
           <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
           <span>stride<span class="brand-period">.</span></span>
         </a>
+        <nav class="dashboard-nav" id="dashboard-nav" aria-label="Dashboard sections" hidden>
+          <button class="dashboard-nav-item" type="button" data-view="calendar" aria-controls="calendar-view" aria-selected="true">Calendar</button>
+          <button class="dashboard-nav-item" type="button" data-view="runs" aria-controls="runs-view" aria-selected="false">Runs</button>
+          <button class="dashboard-nav-item" type="button" data-view="weekday" aria-controls="weekday-view" aria-selected="false">Weekday</button>
+        </nav>
         <div class="topbar-right">
           <span class="sync-label"><span class="status-dot"></span><span id="connection-label">No activities imported</span></span>
           <button class="action-button" id="import-button" type="button">
@@ -27,25 +32,8 @@
       </header>
 
       <main>
-        <section class="intro">
-          <div class="eyebrow"><span class="eyebrow-line"></span> YOUR RUNNING, IN RHYTHM</div>
-          <div class="intro-row">
-            <div>
-              <h1>A little more <span>in stride.</span></h1>
-              <p class="intro-copy">Your running story, one week at a time.</p>
-            </div>
-            <label class="range-select unit-select">
-              <span>CSV distance unit</span>
-              <select id="distance-unit" aria-label="Distance unit in CSV">
-                <option value="km" selected>Kilometers (km)</option>
-                <option value="mi">Miles (mi)</option>
-              </select>
-            </label>
-          </div>
-        </section>
-
         <section class="dashboard" id="dashboard" hidden>
-          <section class="calendar-card" aria-labelledby="calendar-title">
+          <section class="calendar-card dashboard-view" id="calendar-view" aria-labelledby="calendar-title">
             <div class="calendar-heading">
               <div>
                 <h2 id="calendar-title">Running calendar</h2>
@@ -69,6 +57,7 @@
             <div class="calendar-legend" id="calendar-legend" aria-label="Activity type legend"></div>
           </section>
 
+          <div class="dashboard-view runs-view" id="runs-view" hidden>
           <article class="chart-card">
             <div class="chart-heading">
               <div>
@@ -87,17 +76,8 @@
                     </select>
                   </label>
                   <label class="range-select">
-                    <span>Rolling average</span>
-                    <select id="average-period" aria-label="Rolling average length">
-                      <option value="3">3 days</option>
-                      <option value="7" selected>7 days</option>
-                      <option value="14">14 days</option>
-                      <option value="28">28 days</option>
-                    </select>
-                  </label>
-                  <label class="range-select">
-                    <span>Rolling total</span>
-                    <select id="total-period" aria-label="Rolling total length">
+                    <span>Rolling window</span>
+                    <select id="rolling-period" aria-label="Rolling average and total length">
                       <option value="3">3 days</option>
                       <option value="7" selected>7 days</option>
                       <option value="14">14 days</option>
@@ -115,7 +95,26 @@
             <div class="chart-wrap" id="chart" role="img" aria-label="Running distance chart"></div>
             <div class="chart-footer"><span>REST DAYS ARE PART OF THE TRAINING.</span><span id="chart-range"></span></div>
           </article>
-          <section class="runs-card weekday-card" aria-labelledby="weekday-title">
+          <section class="runs-card" aria-labelledby="runs-title">
+            <div class="runs-heading">
+              <div>
+                <h2 id="runs-title">Your runs</h2>
+                <p>Distance and average pace in this time period</p>
+              </div>
+              <span id="runs-summary" class="runs-summary">0 runs</span>
+            </div>
+            <div class="runs-table-wrap">
+              <table class="runs-table">
+                <thead>
+                  <tr><th scope="col">Date</th><th scope="col">Activity</th><th scope="col">Distance</th><th scope="col">Pace</th></tr>
+                </thead>
+                <tbody id="runs-list"></tbody>
+              </table>
+            </div>
+            <p class="pace-note">Pace uses activity duration when available; otherwise Garmin's average pace is used.</p>
+          </section>
+          </div>
+          <section class="runs-card weekday-card dashboard-view" id="weekday-view" aria-labelledby="weekday-title" hidden>
             <div class="runs-heading">
               <div>
                 <h2 id="weekday-title">Activity by weekday</h2>
@@ -145,24 +144,6 @@
               </table>
             </div>
           </section>
-          <section class="runs-card" aria-labelledby="runs-title">
-            <div class="runs-heading">
-              <div>
-                <h2 id="runs-title">Your runs</h2>
-                <p>Distance and average pace in this time period</p>
-              </div>
-              <span id="runs-summary" class="runs-summary">0 runs</span>
-            </div>
-            <div class="runs-table-wrap">
-              <table class="runs-table">
-                <thead>
-                  <tr><th scope="col">Date</th><th scope="col">Activity</th><th scope="col">Distance</th><th scope="col">Pace</th></tr>
-                </thead>
-                <tbody id="runs-list"></tbody>
-              </table>
-            </div>
-            <p class="pace-note">Pace uses activity duration when available; otherwise Garmin's average pace is used.</p>
-          </section>
           <p class="data-note" id="data-note">Running activities · Imported from Garmin Connect</p>
         </section>
 
@@ -175,9 +156,8 @@
             <div class="art-runner">↗</div>
           </div>
           <div class="connect-content">
-            <div class="eyebrow"><span class="eyebrow-line"></span> YOUR NEXT MILE STARTS HERE</div>
-            <h2>Your runs,<br><span>finding their rhythm.</span></h2>
-            <p>Import the activities CSV from Garmin Connect to see your daily running distance and 7-day average. Rest days count, too.</p>
+            <h2>Import your Garmin activities</h2>
+            <p>Choose an activities CSV to view your calendar, distance chart, weekday patterns, and activity list.</p>
             <button class="action-button connect-cta" id="import-cta" type="button">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
               Choose Garmin CSV
