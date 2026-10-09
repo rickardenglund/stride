@@ -17,6 +17,7 @@ const runsList = document.querySelector("#runs-list");
 const runsSummary = document.querySelector("#runs-summary");
 const weekdayFrequency = document.querySelector("#weekday-frequency");
 const weekdayPeriod = document.querySelector("#weekday-period");
+const activityFrequencyChart = document.querySelector("#activity-frequency-chart");
 const chart = document.querySelector("#chart");
 const importButtons = [document.querySelector("#import-button"), document.querySelector("#import-cta")];
 let importedRuns = [];
@@ -55,6 +56,14 @@ function formatDistance(distance, fractionDigits = 1) {
 
 function formatDate(date, options) {
   return new Intl.DateTimeFormat(undefined, options).format(date);
+}
+
+function getISOWeekNumber(date) {
+  const thursday = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  thursday.setUTCDate(thursday.getUTCDate() + 3 - ((thursday.getUTCDay() + 6) % 7));
+  const firstThursday = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 4));
+  firstThursday.setUTCDate(firstThursday.getUTCDate() + 3 - ((firstThursday.getUTCDay() + 6) % 7));
+  return 1 + Math.round((thursday - firstThursday) / 604_800_000);
 }
 
 function escapeHtml(value) {
@@ -170,6 +179,10 @@ function showChartTooltip(point, clientX, clientY) {
     : `Total distance: ${point.dataset.distance} km`;
   chartTooltip.children[2].textContent = `Window: ${point.dataset.window}`;
   chartTooltip.children[3].textContent = `Window length: ${windowDays} days`;
+  positionChartTooltip(clientX, clientY);
+}
+
+function positionChartTooltip(clientX, clientY) {
   chartTooltip.style.left = `${clientX}px`;
   chartTooltip.style.top = `${clientY - 12}px`;
   chartTooltip.classList.add("visible");
@@ -186,6 +199,14 @@ function showChartTooltip(point, clientX, clientY) {
     : Math.min(window.innerHeight - bounds.height - margin, clientY + 14);
   chartTooltip.style.left = `${left}px`;
   chartTooltip.style.top = `${top}px`;
+}
+
+function showFrequencyTooltip(bar, clientX, clientY) {
+  chartTooltip.children[0].textContent = bar.dataset.dateRange;
+  chartTooltip.children[1].textContent = `${bar.dataset.count} ${bar.dataset.count === "1" ? "activity" : "activities"}`;
+  chartTooltip.children[2].textContent = `Grouped by ${bar.dataset.interval}`;
+  chartTooltip.children[3].textContent = "All activity types";
+  positionChartTooltip(clientX, clientY);
 }
 
 function hideChartTooltip() {
@@ -215,6 +236,30 @@ chart.addEventListener("focusin", (event) => {
 });
 chart.addEventListener("focusout", (event) => {
   if (event.target.closest(".avg-point, .sum-point")) hideChartTooltip();
+});
+
+activityFrequencyChart.addEventListener("pointerover", (event) => {
+  const bar = event.target.closest(".frequency-bar");
+  if (bar) showFrequencyTooltip(bar, event.clientX, event.clientY);
+});
+activityFrequencyChart.addEventListener("pointermove", (event) => {
+  const bar = event.target.closest(".frequency-bar");
+  if (bar) showFrequencyTooltip(bar, event.clientX, event.clientY);
+});
+activityFrequencyChart.addEventListener("pointerout", (event) => {
+  if (event.target.closest(".frequency-bar") && !event.relatedTarget?.closest?.(".frequency-bar")) {
+    hideChartTooltip();
+  }
+});
+activityFrequencyChart.addEventListener("focusin", (event) => {
+  const bar = event.target.closest(".frequency-bar");
+  if (bar) {
+    const bounds = bar.getBoundingClientRect();
+    showFrequencyTooltip(bar, bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+  }
+});
+activityFrequencyChart.addEventListener("focusout", (event) => {
+  if (event.target.closest(".frequency-bar")) hideChartTooltip();
 });
 
 function renderRuns(runs, days) {
@@ -273,6 +318,7 @@ function renderWeekdayFrequency(activities, period) {
   const periodActivities = activities.filter(({ date }) =>
     period === "all" || (date >= startKey && date <= todayKey),
   );
+  renderActivityTimeline(periodActivities, period, start, today);
 
   for (const activity of periodActivities) {
     const [year, month, day] = activity.date.split("-").map(Number);
@@ -312,6 +358,113 @@ function renderWeekdayFrequency(activities, period) {
     .map(([category, categoryCounts]) => renderRow(activityCategories[category].label, categoryCounts, category));
   rows.push(renderRow("All activities", allCounts));
   weekdayFrequency.innerHTML = rows.join("");
+}
+
+function renderActivityTimeline(activities, period, periodStart, periodEnd) {
+  const description = document.querySelector("#frequency-timeline-description");
+  if (activities.length === 0) {
+    description.textContent = "No activities in this period.";
+    activityFrequencyChart.innerHTML = '<p class="weekday-empty">No activities to chart.</p>';
+    return;
+  }
+
+  const firstActivityDate = new Date(`${activities.reduce((earliest, item) => item.date < earliest ? item.date : earliest, activities[0].date)}T00:00:00`);
+  const lastActivityDate = new Date(`${activities.reduce((latest, item) => item.date > latest ? item.date : latest, activities[0].date)}T00:00:00`);
+  const startDate = period === "all" ? firstActivityDate : periodStart;
+  const endDate = period === "all" ? lastActivityDate : periodEnd;
+  const spanDays = Math.round(
+    (Date.UTC(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())
+      - Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()))
+      / 86_400_000,
+  ) + 1;
+  const interval = spanDays > 365 ? "month" : "week";
+  const buckets = new Map();
+
+  for (const activity of activities) {
+    const [year, month, day] = activity.date.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    if (interval === "week") date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+    if (interval === "month") date.setDate(1);
+    const key = dateKey(date);
+    const bucket = buckets.get(key) || { date, count: 0 };
+    bucket.count += 1;
+    buckets.set(key, bucket);
+  }
+
+  let bucketStart = new Date(startDate);
+  if (interval === "week") bucketStart.setDate(bucketStart.getDate() - ((bucketStart.getDay() + 6) % 7));
+  if (interval === "month") bucketStart.setDate(1);
+  const bucketsInRange = [];
+  while (bucketStart <= endDate) {
+    const key = dateKey(bucketStart);
+    bucketsInRange.push({
+      date: new Date(bucketStart),
+      count: buckets.get(key)?.count || 0,
+    });
+    if (interval === "day") bucketStart.setDate(bucketStart.getDate() + 1);
+    else if (interval === "week") bucketStart.setDate(bucketStart.getDate() + 7);
+    else bucketStart.setMonth(bucketStart.getMonth() + 1);
+  }
+
+  const intervalLabel = interval === "day" ? "daily" : interval === "week" ? "weekly" : "monthly";
+  description.textContent = `${activities.length} activities, grouped ${intervalLabel}`;
+  const height = 210;
+  const margin = { top: 12, right: 12, bottom: 38, left: 40 };
+  const xStep = 28;
+  const plotWidth = bucketsInRange.length * xStep;
+  const width = margin.left + plotWidth + margin.right;
+  const plotHeight = height - margin.top - margin.bottom;
+  const maxCount = Math.max(1, ...bucketsInRange.map((bucket) => bucket.count));
+  const barWidth = Math.max(3, Math.min(22, xStep * 0.66));
+  const y = (count) => margin.top + plotHeight - (count / maxCount) * plotHeight;
+  const tickCount = Math.min(4, maxCount);
+  const grid = Array.from({ length: tickCount + 1 }, (_, index) => {
+    const value = Math.round((maxCount / tickCount) * index);
+    const yPosition = y(value);
+    return `<line class="frequency-grid-line" x1="${margin.left}" y1="${yPosition}" x2="${width - margin.right}" y2="${yPosition}"></line>`;
+  }).join("");
+  const yAxisLabels = Array.from({ length: tickCount + 1 }, (_, index) => {
+    const value = Math.round((maxCount / tickCount) * index);
+    return `<text class="frequency-axis-label" x="${margin.left - 8}" y="${y(value) + 4}" text-anchor="end">${value}</text>`;
+  }).join("");
+  const labelStep = Math.max(1, Math.ceil(bucketsInRange.length / 8));
+  const bars = bucketsInRange.map((bucket, index) => {
+    const x = margin.left + index * xStep + (xStep - barWidth) / 2;
+    const barHeight = (bucket.count / maxCount) * plotHeight;
+    const label = interval === "week"
+      ? `W${String(getISOWeekNumber(bucket.date)).padStart(2, "0")}`
+      : formatDate(bucket.date, { month: "short", year: "2-digit" });
+    const bucketEnd = new Date(bucket.date);
+    if (interval === "week") bucketEnd.setDate(bucketEnd.getDate() + 6);
+    if (interval === "month") bucketEnd.setMonth(bucketEnd.getMonth() + 1, 0);
+    const rangeStart = bucket.date < startDate ? startDate : bucket.date;
+    const rangeEnd = bucketEnd > endDate ? endDate : bucketEnd;
+    const dateOptions = { month: "short", day: "numeric", year: "numeric" };
+    const dateRange = rangeStart.getTime() === rangeEnd.getTime()
+      ? formatDate(rangeStart, dateOptions)
+      : `${formatDate(rangeStart, dateOptions)}–${formatDate(rangeEnd, dateOptions)}`;
+    const intervalLabel = interval === "day" ? "day" : `${interval}ly`;
+    const accessibleSummary = `${dateRange}: ${bucket.count} ${bucket.count === 1 ? "activity" : "activities"}, grouped by ${intervalLabel}, all activity types`;
+    const bar = `<rect class="frequency-bar" x="${x}" y="${y(bucket.count)}" width="${barWidth}" height="${barHeight}" rx="2" tabindex="0" data-date-range="${escapeHtml(dateRange)}" data-count="${bucket.count}" data-interval="${intervalLabel}" aria-label="${escapeHtml(accessibleSummary)}"></rect>`;
+    const axisLabel = index % labelStep === 0 || index === bucketsInRange.length - 1
+      ? `<text class="frequency-axis-label" x="${x + barWidth / 2}" y="${height - 10}" text-anchor="middle">${label}</text>`
+      : "";
+    return `${bar}${axisLabel}`;
+  }).join("");
+
+  activityFrequencyChart.innerHTML = `<svg class="frequency-y-axis" width="${margin.left}" height="${height}" viewBox="0 0 ${margin.left} ${height}" aria-hidden="true">
+    ${yAxisLabels}
+  </svg>
+  <div class="frequency-chart-scroll">
+    <svg class="frequency-chart-svg" width="${plotWidth + margin.right}" height="${height}" viewBox="0 0 ${plotWidth + margin.right} ${height}" role="group" aria-label="Total activities by ${intervalLabel} interval">
+      <g transform="translate(${-margin.left} 0)">
+        ${grid}
+        ${bars}
+      </g>
+    </svg>
+  </div>`;
+  const chartScroll = activityFrequencyChart.querySelector(".frequency-chart-scroll");
+  chartScroll.scrollLeft = chartScroll.scrollWidth;
 }
 
 function renderRunList(runs) {
@@ -525,6 +678,29 @@ function setDashboardView(view, updateUrl = false) {
   }
 }
 
+async function connectDevReload() {
+  try {
+    const response = await fetch("/__dev/status");
+    if (!response.ok) throw new Error(`Development reload status failed: ${response.status}`);
+    const { enabled } = await response.json();
+    if (!enabled) return;
+
+    const events = new EventSource("/__dev/events");
+    let connected = false;
+    let reconnecting = false;
+    events.addEventListener("open", () => {
+      if (reconnecting) window.location.reload();
+      connected = true;
+    });
+    events.addEventListener("reload", () => window.location.reload());
+    events.addEventListener("error", () => {
+      if (connected) reconnecting = true;
+    });
+  } catch (error) {
+    console.error("Unable to connect development auto-reload:", error);
+  }
+}
+
 async function importFile(file) {
   if (!file) return;
   notice.hidden = true;
@@ -566,6 +742,7 @@ dashboardNav.addEventListener("click", (event) => {
 window.addEventListener("popstate", () => setDashboardView(window.location.hash.slice(1)));
 window.addEventListener("hashchange", () => setDashboardView(window.location.hash.slice(1)));
 setDashboardView(window.location.hash.slice(1));
+connectDevReload();
 csvInput.addEventListener("change", () => importFile(csvInput.files[0]));
 rangeSelect.addEventListener("change", refreshDashboard);
 rollingPeriod.addEventListener("change", refreshDashboard);

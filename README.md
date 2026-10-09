@@ -6,7 +6,7 @@ Stride charts daily running distance and a 7-day rolling average from a Garmin C
 
 1. In a web browser, sign in to [Garmin Connect](https://connect.garmin.com/).
 2. Open **Activities → All Activities**, scroll to the bottom of the activity list, and choose **Export CSV**. Save the CSV file.
-3. Start Stride with Node.js 18 or later:
+3. Start Stride with Node.js 22 or later:
 
    ```sh
    npm start
@@ -14,7 +14,7 @@ Stride charts daily running distance and a 7-day rolling average from a Garmin C
 
 4. Visit [http://localhost:3000](http://localhost:3000) and choose the CSV file.
 
-For development, use `npm run dev` to automatically restart the server when server files change. Browser-side changes such as styles and scripts will normally update on browser refresh; Node's watch mode does not automatically reload the browser.
+For development, use `npm run dev` to automatically restart the server when `server.js`, `package.json`, or `dev.js` changes. Changes under `public/` trigger a browser reload automatically.
 
 Stride charts running and trail-running activities, and uses activity types from the export to color the calendar (including cycling, walking/hiking, swimming, strength training, and yoga). It supports Garmin CSVs with comma- or semicolon-separated columns. If the distance column specifies miles, Stride converts them to kilometers automatically. A plain `Distance` column is treated as kilometers. Select **Import CSV** again whenever you want to replace the saved data with an updated export.
 

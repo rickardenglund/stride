@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js",
+    "dev": "node --watch-path=dev.js --watch-path=server.js --watch-path=package.json dev.js",
     "test": "node --test"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   }
 }

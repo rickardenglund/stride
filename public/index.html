@@ -20,7 +20,7 @@
         <nav class="dashboard-nav" id="dashboard-nav" aria-label="Dashboard sections" hidden>
           <button class="dashboard-nav-item" type="button" data-view="calendar" aria-controls="calendar-view" aria-selected="true">Calendar</button>
           <button class="dashboard-nav-item" type="button" data-view="runs" aria-controls="runs-view" aria-selected="false">Runs</button>
-          <button class="dashboard-nav-item" type="button" data-view="weekday" aria-controls="weekday-view" aria-selected="false">Weekday</button>
+          <button class="dashboard-nav-item" type="button" data-view="weekday" aria-controls="weekday-view" aria-selected="false">Frequencies</button>
         </nav>
         <div class="topbar-right">
           <span class="sync-label"><span class="status-dot"></span><span id="connection-label">No activities imported</span></span>
@@ -114,36 +114,47 @@
             <p class="pace-note">Pace uses activity duration when available; otherwise Garmin's average pace is used.</p>
           </section>
           </div>
-          <section class="runs-card weekday-card dashboard-view" id="weekday-view" aria-labelledby="weekday-title" hidden>
-            <div class="runs-heading">
-              <div>
-                <h2 id="weekday-title">Activity by weekday</h2>
-                <p id="weekday-description">Activity counts grouped by weekday</p>
+          <div class="dashboard-view" id="weekday-view" hidden>
+            <article class="chart-card frequency-timeline" aria-labelledby="frequency-timeline-title">
+              <div class="chart-heading frequency-timeline-heading">
+                <div>
+                  <h2 id="frequency-timeline-title">Activities over time</h2>
+                  <p id="frequency-timeline-description">Activity counts in adaptive time intervals</p>
+                </div>
+                <label class="range-select weekday-range-select">
+                  <span>Time period</span>
+                  <select id="weekday-period" aria-label="Activity frequency time period">
+                    <option value="30">Last 30 days</option>
+                    <option value="90" selected>Last 90 days</option>
+                    <option value="180">Last 6 months</option>
+                    <option value="365">Last year</option>
+                    <option value="all">All imported</option>
+                  </select>
+                </label>
               </div>
-              <label class="range-select weekday-range-select">
-                <span>Time period</span>
-                <select id="weekday-period" aria-label="Activity frequency time period">
-                  <option value="30">Last 30 days</option>
-                  <option value="90" selected>Last 90 days</option>
-                  <option value="180">Last 6 months</option>
-                  <option value="365">Last year</option>
-                  <option value="all">All imported</option>
-                </select>
-              </label>
-            </div>
-            <div class="runs-table-wrap">
-              <table class="weekday-table" aria-describedby="weekday-description">
-                <thead>
-                  <tr>
-                    <th scope="col">Activity</th>
-                    <th scope="col">Mon</th><th scope="col">Tue</th><th scope="col">Wed</th>
-                    <th scope="col">Thu</th><th scope="col">Fri</th><th scope="col">Sat</th><th scope="col">Sun</th>
-                  </tr>
-                </thead>
-                <tbody id="weekday-frequency"></tbody>
-              </table>
-            </div>
-          </section>
+              <div id="activity-frequency-chart" class="activity-frequency-chart"></div>
+            </article>
+            <section class="runs-card weekday-card" aria-labelledby="weekday-title">
+              <div class="runs-heading">
+                <div>
+                  <h2 id="weekday-title">Activity by weekday</h2>
+                  <p id="weekday-description">Activity counts grouped by weekday</p>
+                </div>
+              </div>
+              <div class="runs-table-wrap">
+                <table class="weekday-table" aria-describedby="weekday-description">
+                  <thead>
+                    <tr>
+                      <th scope="col">Activity</th>
+                      <th scope="col">Mon</th><th scope="col">Tue</th><th scope="col">Wed</th>
+                      <th scope="col">Thu</th><th scope="col">Fri</th><th scope="col">Sat</th><th scope="col">Sun</th>
+                    </tr>
+                  </thead>
+                  <tbody id="weekday-frequency"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
           <p class="data-note" id="data-note">Running activities · Imported from Garmin Connect</p>
         </section>
 

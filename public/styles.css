@@ -156,6 +156,17 @@ h1 span, .connect-content h2 span { color: var(--blue-2); }
 .runs-heading p { color: #39443d; font-size: 12px; margin-top: 5px; }
 .weekday-range-select { flex: 0 0 auto; }
 .weekday-empty { color: var(--muted); text-align: center; }
+.frequency-timeline { margin-bottom: 15px; }
+.frequency-timeline-heading { margin-bottom: 0; }
+.activity-frequency-chart { display: flex; overflow: hidden; margin-top: 15px; padding: 8px 4px 0; background: #0c1821; border-radius: 4px; }
+.frequency-y-axis { display: block; flex: 0 0 40px; width: 40px; height: 210px; }
+.frequency-chart-scroll { min-width: 0; flex: 1 1 auto; overflow-x: auto; }
+.frequency-chart-svg { display: block; width: auto; max-width: none; height: 210px; }
+.frequency-grid-line { stroke: #31495a; stroke-width: 1; }
+.frequency-axis-label { fill: #b5c7d6; font: 10px "DM Sans", sans-serif; }
+.frequency-bar { fill: #bf8a63; opacity: .9; cursor: crosshair; }
+.frequency-bar:hover { fill: #e0ae83; opacity: 1; }
+.frequency-bar:focus-visible { fill: #e0ae83; opacity: 1; stroke: #f1d3ba; stroke-width: 2; }
 .runs-summary { color: #1f2925; font-size: 12px; font-weight: 700; }
 .runs-table-wrap { overflow-x: auto; }
 .runs-table { width: 100%; border-collapse: collapse; text-align: left; }
