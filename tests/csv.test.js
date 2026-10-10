@@ -28,13 +28,13 @@ test("imports only running activities and handles quoted CSV fields", () => {
   });
 });
 
-test("detects miles from the distance header and converts to kilometers", () => {
-  const result = parseGarminCsv(
-    "Activity Type,Date,Distance (mi)\nRunning,2026-10-01,3.1",
-    "km",
-  );
-  assert.equal(result.unit, "mi");
-  assert.ok(Math.abs(result.runs[0].distance - 4988.9664) < 1e-9);
+test("rejects mile-based distance headers with an actionable error", () => {
+  for (const unit of ["mi", "mile", "miles", "MI"]) {
+    assert.throws(
+      () => parseGarminCsv(`Activity Type,Date,Distance (${unit})\nRunning,2026-10-01,3.1`),
+      { message: "Mile-based CSV imports are not supported. Export your activities in kilometers from Garmin Connect and try again." },
+    );
+  }
 });
 
 test("detects meter-based distance headers and converts to kilometers", () => {
@@ -63,9 +63,16 @@ test("accepts semicolon-delimited CSV and European dates", () => {
 test("uses the selected unit when the distance header has no unit", () => {
   const result = parseGarminCsv(
     "Activity Type,Date,Distance\nRunning,2026-10-01,2",
-    "mi",
+    "m",
   );
-  assert.ok(Math.abs(result.runs[0].distance - 3218.688) < 1e-9);
+  assert.equal(result.runs[0].distance, 2);
+});
+
+test("rejects a miles fallback when the distance header has no unit", () => {
+  assert.throws(
+    () => parseGarminCsv("Activity Type,Date,Distance\nRunning,2026-10-01,2", "mi"),
+    /Mile-based CSV imports are not supported/,
+  );
 });
 
 test("calculates min/km pace from run duration and distance", () => {
@@ -77,9 +84,25 @@ test("calculates min/km pace from run duration and distance", () => {
 
 test("uses Garmin average pace when duration is not available", () => {
   const result = parseGarminCsv(
-    "Activity Type,Date,Distance (mi),Avg Pace (min/mi)\nRunning,2026-10-01,3,9:00",
+    "Activity Type,Date,Distance (km),Avg Pace (min/km)\nRunning,2026-10-01,3,6:00",
   );
-  assert.ok(Math.abs(result.runs[0].paceSecondsPerKm - 540 / 1.609344) < 1e-9);
+  assert.equal(result.runs[0].paceSecondsPerKm, 360);
+});
+
+test("rejects mile-based pace headers even when distance has no unit", () => {
+  assert.throws(
+    () => parseGarminCsv("Activity Type,Date,Distance,Avg Pace (min/mi)\nRunning,2026-10-01,3,9:00"),
+    /Mile-based CSV imports are not supported/,
+  );
+});
+
+test("rejects mile units in pace values, including after valid metric rows", () => {
+  for (const pace of ["9:00 /mi", "9:00 per mi", "9:00 /mile"]) {
+    assert.throws(
+      () => parseGarminCsv(`Activity Type,Date,Distance,Avg Pace\nRunning,2026-10-01,5,6:00 /km\nRunning,2026-10-02,3,${pace}`),
+      /Mile-based CSV imports are not supported/,
+    );
+  }
 });
 
 test("reads Garmin average pace exported as hh:mm:ss", () => {

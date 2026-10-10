@@ -1,3 +1,6 @@
+const MILE_UNIT = /\bmi(?:le)?s?\b/i;
+const MILE_IMPORT_ERROR = "Mile-based CSV imports are not supported. Export your activities in kilometers from Garmin Connect and try again.";
+
 function parseRows(text) {
   const firstLine = text.split(/\r?\n/, 1)[0] || "";
   let commaCount = 0;
@@ -88,13 +91,13 @@ function parseTimeSeconds(value) {
 }
 
 function parsePaceSecondsPerKm(value, header) {
+  if (MILE_UNIT.test(value) || MILE_UNIT.test(header)) throw new Error(MILE_IMPORT_ERROR);
   const match = value.trim().match(/^(\d+):([0-5]?\d)(?::([0-5]?\d))?(?:\s*(?:\/|per)\s*(km|mi))?$/i);
   if (!match) return null;
   const paceSeconds = match[3] === undefined
     ? Number(match[1]) * 60 + Number(match[2])
     : Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
-  const unit = (match[4] || header).toLowerCase();
-  return /\bmi\b|mile/.test(unit) ? paceSeconds / 1.609344 : paceSeconds;
+  return paceSeconds;
 }
 
 export function normalizeStoredRuns(runs, distanceUnit) {
@@ -136,7 +139,7 @@ export function parseGarminCsv(text, fallbackUnit = "km") {
   }
 
   const distanceHeader = headers[distanceIndex];
-  const headerUnit = /\bmi(?:le)?s?\b/.test(distanceHeader)
+  const headerUnit = MILE_UNIT.test(distanceHeader)
     ? "mi"
     : /\bkm\b|kilometer/.test(distanceHeader)
       ? "km"
@@ -144,7 +147,10 @@ export function parseGarminCsv(text, fallbackUnit = "km") {
         ? "m"
       : null;
   const unit = headerUnit || fallbackUnit;
-  const multiplier = unit === "mi" ? 1.609344 : unit === "m" ? 0.001 : 1;
+  if (MILE_UNIT.test(unit) || (paceIndex !== -1 && MILE_UNIT.test(headers[paceIndex]))) {
+    throw new Error(MILE_IMPORT_ERROR);
+  }
+  const multiplier = unit === "m" ? 0.001 : 1;
   const runs = [];
   const activities = [];
 

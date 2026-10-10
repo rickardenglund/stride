@@ -16,7 +16,7 @@ Stride charts daily running distance and a 7-day rolling average from a Garmin C
 
 For development, use `npm run dev` to automatically restart the server when `server.js`, `package.json`, or `dev.js` changes. Changes under `public/` trigger a browser reload automatically.
 
-Stride charts running and trail-running activities, and uses activity types from the export to color the calendar (including cycling, walking/hiking, swimming, strength training, and yoga). It supports Garmin CSVs with comma- or semicolon-separated columns. If the distance column specifies miles, Stride converts them to kilometers automatically. A plain `Distance` column is treated as kilometers. Select **Import CSV** again whenever you want to replace the saved data with an updated export.
+Stride charts running and trail-running activities, and uses activity types from the export to color the calendar (including cycling, walking/hiking, swimming, strength training, and yoga). It supports Garmin CSVs with comma- or semicolon-separated columns. Mile-based imports are rejected when miles are specified in the distance or pace units; export your activities in kilometers from Garmin Connect instead. A plain `Distance` column is treated as kilometers, so miles cannot be detected when the export contains no unit labels. Select **Import CSV** again whenever you want to replace the saved data with an updated export.
 
 The browser saves imported runs on this device, so the dashboard is available after a refresh. Use the same browser and local address to see the saved data.
 
