@@ -1,4 +1,7 @@
 import { normalizeStoredRuns, parseGarminCsv } from "./csv.js";
+import { mergeActivities, runningActivities } from "./activities.js";
+import { dateKey, distanceScale, summarizeTraining } from "./training.js";
+import { buildRunHeatmap, renderRunHeatmap } from "./heatmap.js";
 
 const dashboard = document.querySelector("#dashboard");
 const dashboardNav = document.querySelector("#dashboard-nav");
@@ -7,6 +10,9 @@ const notice = document.querySelector("#notice");
 const dashboardPeriod = document.querySelector("#dashboard-period");
 const dashboardPeriodControl = document.querySelector("#dashboard-period-control");
 const rollingPeriod = document.querySelector("#rolling-period");
+const showRollingTotal = document.querySelector("#show-rolling-total");
+const importMenu = document.querySelector("#import-menu");
+const csvDropZone = document.querySelector("#csv-drop-zone");
 const connectionLabel = document.querySelector("#connection-label");
 const statusDot = document.querySelector(".status-dot");
 const csvInput = document.querySelector("#csv-input");
@@ -40,6 +46,7 @@ const gpxInput = document.querySelector("#gpx-input");
 const unloadDataButton = document.querySelector("#unload-data-button");
 const chart = document.querySelector("#chart");
 const importButtons = [document.querySelector("#import-button"), document.querySelector("#import-cta")];
+let csvImportInProgress = false;
 let importedRuns = [];
 let importedActivities = [];
 let importedFileName = "";
@@ -52,23 +59,40 @@ let selectedHeartRatePoints = [];
 let selectedElevationPoints = [];
 
 const activityCategories = {
-  running: { label: "Running", color: "#1d4f7a", background: "#dfeef8", stripe: "#244760" },
-  trail: { label: "Trail running", color: "#8b5a39", background: "#f3e5d9", stripe: "#5a4635" },
-  cycling: { label: "Cycling", color: "#2c7bb8", background: "#dfe9f7", stripe: "#214b44" },
-  walking: { label: "Walking & hiking", color: "#3a5d8b", background: "#e7edf9", stripe: "#41395a" },
-  swimming: { label: "Swimming", color: "#0d5c73", background: "#dff4fb", stripe: "#224956" },
-  strength: { label: "Strength", color: "#865528", background: "#f5e7da", stripe: "#573b3b" },
-  climbing: { label: "Climbing", color: "#4f3d7d", background: "#efeafb", stripe: "#5a512f" },
-  yoga: { label: "Yoga", color: "#2d5e71", background: "#e9f3f7", stripe: "#57394f" },
-  other: { label: "Other", color: "#303a34", background: "#eef2f4", stripe: "#46515c" },
+  running: { label: "Running", background: "#173c5a" },
+  trail: { label: "Trail running", background: "#493626" },
+  cycling: { label: "Cycling", background: "#16463f" },
+  walking: { label: "Walking & hiking", background: "#3b315e" },
+  swimming: { label: "Swimming", background: "#174454" },
+  strength: { label: "Strength", background: "#503233" },
+  climbing: { label: "Climbing", background: "#514522" },
+  yoga: { label: "Yoga", background: "#50304a" },
+  other: { label: "Other", background: "#344451" },
 };
+
+const activityIcons = {
+  running: '<circle cx="15" cy="4" r="2"/><path d="m12 8 4 4h4M16 7l-5 6 4 3-1 5M11 13l-3 4H3M12 8H8l-3 4"/>',
+  trail: '<path d="m2 20 7-12 4 6 3-5 6 11H2Z M7 11l2 2 2-2 M13 20l3-3-3-2"/>',
+  cycling: '<circle cx="5" cy="16" r="4"/><circle cx="19" cy="16" r="4"/><path d="m5 16 5-8 5 8H5M10 8 8 5H6m4 3h8l1 8M16 5h2v3"/>',
+  walking: '<circle cx="13" cy="4" r="2"/><path d="m11 8 3 1 3 4h3M14 9l-3 6 4 3 1 4M11 15l-4 7M11 8l-4 4v4"/>',
+  swimming: '<circle cx="17" cy="7" r="2"/><path d="m4 13 5-4 5 4M9 9l-3-4 4-2M2 17q2-2 4 0t4 0 4 0 4 0 4 0M2 21q2-2 4 0t4 0 4 0 4 0 4 0"/>',
+  strength: '<path d="M7 12h10M3 10v4m18-4v4"/><rect x="4" y="6" width="3" height="12" rx="1"/><rect x="17" y="6" width="3" height="12" rx="1"/>',
+  climbing: '<circle cx="11" cy="5" r="2"/><path d="m9 9 4 1 3-5M10 10l-4 3-2-3M13 10l-2 5 4 2-1 5M11 15H7l-2 5M20 2l-2 6 3 5-3 9"/>',
+  yoga: '<circle cx="12" cy="5" r="2"/><path d="M9 10h6l2 5h4M9 10l-2 5H3M9 14v3l-5 2 4 2h8l4-2-5-2v-3M8 21l4-3 4 3"/>',
+  other: '<circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>',
+};
+
+function activityIcon(category) {
+  const key = Object.hasOwn(activityIcons, category) ? category : "other";
+  return `<svg class="activity-icon marker-${key}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${activityIcons[key]}</svg>`;
+}
 
 function categoryForActivity(type) {
   const normalized = type.toLowerCase();
   if (/trail/.test(normalized)) return "trail";
   if (/run|running/.test(normalized)) return "running";
   if (/cycl|bike|biking/.test(normalized)) return "cycling";
-  if (/walk|hike/.test(normalized)) return "walking";
+  if (/walk|hik/.test(normalized)) return "walking";
   if (/swim/.test(normalized)) return "swimming";
   if (/yoga/.test(normalized)) return "yoga";
   if (/climb|boulder/.test(normalized)) return "climbing";
@@ -119,29 +143,34 @@ function formatDuration(seconds) {
     : `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
-function showError(message) {
+function showNotice(message, kind = "error") {
   notice.textContent = message;
+  notice.dataset.kind = kind;
+  notice.setAttribute("role", kind === "error" ? "alert" : "status");
   notice.hidden = false;
 }
 
-function makeChart(daily, dates, rollingAverage, rollingTotals, averageDays, totalDays) {
-  const width = Math.max(800, dates.length * 10);
+function showError(message) {
+  showNotice(message);
+}
+
+function makeChart(daily, dates, rollingAverage, rollingTotals, averageDays, totalDays, includeTotals = false, availableWidth = 800) {
+  const width = Math.max(800, availableWidth, dates.length * 10);
   const height = 260;
   const left = 43;
   const right = 12;
-  const top = 12;
+  const top = 26;
   const bottom = 34;
   const plotWidth = width - left - right;
   const plotHeight = height - top - bottom;
-  const maxValue = Math.max(5, ...daily, ...rollingAverage, ...rollingTotals);
-  const maxY = Math.ceil(maxValue / 5) * 5;
+  const { tickStep, maxY } = distanceScale(daily, rollingAverage, rollingTotals, includeTotals);
   const x = (index) => left + (index / Math.max(1, dates.length - 1)) * plotWidth;
   const y = (value) => top + plotHeight - (value / maxY) * plotHeight;
   const barWidth = Math.max(2, Math.min(7, (plotWidth / dates.length) * 0.55));
   const grid = [];
   const yAxisLabels = [];
 
-  for (let value = 0; value <= maxY; value += maxY <= 10 ? 2 : 5) {
+  for (let value = 0; value <= maxY; value += tickStep) {
     const position = y(value);
     grid.push(`<line class="grid-line" x1="${left}" y1="${position}" x2="${width - right}" y2="${position}"></line>`);
     yAxisLabels.push(`<text class="axis-label" x="${left - 10}" y="${position + 3}" text-anchor="end">${value}</text>`);
@@ -149,7 +178,8 @@ function makeChart(daily, dates, rollingAverage, rollingTotals, averageDays, tot
   const bars = daily.map((value, index) => {
     const barHeight = (value / maxY) * plotHeight;
     const barX = x(index) - barWidth / 2;
-    return `<rect class="daily-bar" x="${barX}" y="${y(value)}" width="${barWidth}" height="${barHeight}" rx="2"><title>${formatDate(dates[index], { month: "short", day: "numeric" })}: ${formatDistance(value)} km</title></rect>`;
+    const date = formatDate(dates[index], { month: "short", day: "numeric", year: "numeric" });
+    return `<rect class="daily-bar" x="${barX}" y="${y(value)}" width="${barWidth}" height="${barHeight}" rx="2" ${value > 0 ? 'tabindex="0"' : ""} data-kind="daily" data-date="${escapeHtml(date)}" data-distance="${formatDistance(value)}" aria-label="${escapeHtml(date)}: ${formatDistance(value)} km"></rect>`;
   }).join("");
 
   const linePoints = rollingAverage.map((value, index) => `${x(index)},${y(value)}`);
@@ -163,28 +193,33 @@ function makeChart(daily, dates, rollingAverage, rollingTotals, averageDays, tot
     const label = formatDate(date, { month: "short", day: "numeric" });
     return `<text class="axis-label" x="${x(index)}" y="${height - 9}" text-anchor="middle">${label}</text>`;
   }).join("");
+  const windowLabel = (index, windowDays) => {
+    const start = new Date(dates[index]);
+    start.setDate(start.getDate() - windowDays + 1);
+    const options = { month: "short", day: "numeric" };
+    return `${formatDate(start, options)}–${formatDate(dates[index], options)}`;
+  };
   const points = rollingAverage.map((value, index) => {
-    const windowStart = Math.max(0, index - averageDays + 1);
-    const startDate = formatDate(dates[windowStart], { month: "short", day: "numeric" });
-    const endDate = formatDate(dates[index], { month: "short", day: "numeric" });
-    const tooltip = `${averageDays}-day rolling average: ${formatDistance(value)} km/day, window: ${startDate}–${endDate}`;
-    return `<circle class="avg-point" cx="${x(index)}" cy="${y(value)}" r="5" tabindex="0" data-kind="average" data-window-days="${averageDays}" data-average="${formatDistance(value)}" data-window="${startDate}–${endDate}" aria-label="${tooltip}"></circle>`;
+    const window = windowLabel(index, averageDays);
+    const tooltip = `${averageDays}-day rolling average: ${formatDistance(value)} km/day, window: ${window}`;
+    return `<circle class="avg-point" cx="${x(index)}" cy="${y(value)}" r="5" tabindex="0" data-kind="average" data-window-days="${averageDays}" data-average="${formatDistance(value)}" data-window="${escapeHtml(window)}" aria-label="${escapeHtml(tooltip)}"></circle>`;
   }).join("");
-  const totalMarkers = rollingTotals.map((value, index) =>
-    `<circle class="sum-point" cx="${x(index)}" cy="${y(value)}" r="4" tabindex="0" data-kind="total" data-window-days="${totalDays}" data-average="${formatDistance(rollingAverage[index])}" data-distance="${formatDistance(value)}" data-window="${formatDate(dates[Math.max(0, index - totalDays + 1)], { month: "short", day: "numeric" })}–${formatDate(dates[index], { month: "short", day: "numeric" })}" aria-label="${totalDays}-day total: ${formatDistance(value)} km"></circle>`,
-  ).join("");
+  const totalMarkers = includeTotals ? rollingTotals.map((value, index) =>
+    `<circle class="sum-point" cx="${x(index)}" cy="${y(value)}" r="4" tabindex="0" data-kind="total" data-window-days="${totalDays}" data-distance="${formatDistance(value)}" data-window="${escapeHtml(windowLabel(index, totalDays))}" aria-label="${totalDays}-day total: ${formatDistance(value)} km"></circle>`,
+  ).join("") : "";
 
   return `<svg class="running-load-y-axis" width="${left}" height="${height}" viewBox="0 0 ${left} ${height}" aria-hidden="true">
+    <text class="axis-label" x="${left - 10}" y="12" text-anchor="end">km</text>
     ${yAxisLabels.join("")}
   </svg>
   <div class="running-load-plot-scroll">
-    <svg width="${width - left}" height="${height}" viewBox="0 0 ${width - left} ${height}" role="img" aria-label="Daily running distance bars, ${averageDays}-day rolling average line, and ${totalDays}-day rolling total line. All use the same vertical scale in kilometers">
+    <svg width="${width - left}" height="${height}" viewBox="0 0 ${width - left} ${height}" role="group" aria-label="Daily running distance in kilometers and ${averageDays}-day average in kilometers per day${includeTotals ? `, with ${totalDays}-day total in kilometers` : ""}">
       <g transform="translate(${-left} 0)">
         ${grid.join("")}
         <path class="avg-area" d="${areaPath}"></path>
         ${bars}
         <path class="avg-path" d="${linePath}"></path>
-        <path class="sum-path" d="${totalPath}"></path>
+        ${includeTotals ? `<path class="sum-path" d="${totalPath}"></path>` : ""}
         ${points}
         ${totalMarkers}
         ${labels}
@@ -206,6 +241,14 @@ function createChartTooltip() {
 const chartTooltip = createChartTooltip();
 
 function showChartTooltip(point, clientX, clientY) {
+  if (point.dataset.kind === "daily") {
+    chartTooltip.children[0].textContent = point.dataset.date;
+    chartTooltip.children[1].textContent = `${point.dataset.distance} km`;
+    chartTooltip.children[2].textContent = "Daily running distance";
+    chartTooltip.children[3].textContent = "";
+    positionChartTooltip(clientX, clientY);
+    return;
+  }
   const windowDays = Number(point.dataset.windowDays);
   chartTooltip.children[0].textContent = `${windowDays}-day rolling ${point.dataset.kind}`;
   chartTooltip.children[1].textContent = point.dataset.kind === "average"
@@ -278,27 +321,27 @@ function refreshChartLatestButton(scrollContainer, button) {
 }
 
 chart.addEventListener("pointerover", (event) => {
-  const point = event.target.closest(".avg-point, .sum-point");
+  const point = event.target.closest(".avg-point, .sum-point, .daily-bar");
   if (point) showChartTooltip(point, event.clientX, event.clientY);
 });
 chart.addEventListener("pointermove", (event) => {
-  const point = event.target.closest(".avg-point, .sum-point");
+  const point = event.target.closest(".avg-point, .sum-point, .daily-bar");
   if (point) showChartTooltip(point, event.clientX, event.clientY);
 });
 chart.addEventListener("pointerout", (event) => {
-  if (event.target.closest(".avg-point, .sum-point") && !event.relatedTarget?.closest?.(".avg-point, .sum-point")) {
+  if (event.target.closest(".avg-point, .sum-point, .daily-bar") && !event.relatedTarget?.closest?.(".avg-point, .sum-point, .daily-bar")) {
     hideChartTooltip();
   }
 });
 chart.addEventListener("focusin", (event) => {
-  const point = event.target.closest(".avg-point, .sum-point");
+  const point = event.target.closest(".avg-point, .sum-point, .daily-bar");
   if (point) {
     const bounds = point.getBoundingClientRect();
     showChartTooltip(point, bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
   }
 });
 chart.addEventListener("focusout", (event) => {
-  if (event.target.closest(".avg-point, .sum-point")) hideChartTooltip();
+  if (event.target.closest(".avg-point, .sum-point, .daily-bar")) hideChartTooltip();
 });
 
 activityFrequencyChart.addEventListener("pointerover", (event) => {
@@ -371,13 +414,14 @@ function renderRuns(runs, days) {
     .filter((run) => run.date >= dateKey(visibleDates[0]) && run.date <= dateKey(visibleDates.at(-1)))
     .sort((left, right) => right.date.localeCompare(left.date));
   const runningLoadChart = document.querySelector("#chart");
-  runningLoadChart.innerHTML = makeChart(visibleDaily, visibleDates, visibleRolling, visibleTotals, windowDays, windowDays);
+  runningLoadChart.innerHTML = makeChart(visibleDaily, visibleDates, visibleRolling, visibleTotals, windowDays, windowDays, showRollingTotal.checked, runningLoadChart.clientWidth);
   const chartScroll = runningLoadChart.querySelector(".running-load-plot-scroll");
   chartScroll.scrollLeft = chartScroll.scrollWidth;
   monitorChartScroll(runningLoadChart, runningLoadLatest);
-  document.querySelector("#chart").setAttribute("aria-label", `Running distance with ${windowDays}-day rolling average and ${windowDays}-day rolling total for ${timePeriodDescription}`);
+  document.querySelector("#chart").setAttribute("aria-label", `Running distance with ${windowDays}-day rolling average${showRollingTotal.checked ? ` and ${windowDays}-day rolling total` : ""} for ${timePeriodDescription}`);
   document.querySelector("#average-legend-label").textContent = `${windowDays}-day average`;
   document.querySelector("#total-legend-label").textContent = `${windowDays}-day total`;
+  document.querySelector("#total-legend").hidden = !showRollingTotal.checked;
   document.querySelector("#chart-range").textContent = `${formatDate(visibleDates[0], { month: "short", day: "numeric" }).toUpperCase()} — ${formatDate(visibleDates.at(-1), { month: "short", day: "numeric" }).toUpperCase()}`;
   renderRunList(periodRuns);
 }
@@ -488,7 +532,7 @@ function renderActivityTimeline(activities, period, periodStart, periodEnd) {
   description.textContent = `${activities.length} activities, grouped ${intervalLabel}`;
   const height = 210;
   const margin = { top: 12, right: 12, bottom: 38, left: 40 };
-  const xStep = 28;
+  const xStep = Math.max(28, (activityFrequencyChart.clientWidth - margin.left - margin.right) / bucketsInRange.length);
   const plotWidth = bucketsInRange.length * xStep;
   const width = margin.left + plotWidth + margin.right;
   const plotHeight = height - margin.top - margin.bottom;
@@ -575,7 +619,12 @@ function renderRunList(runs) {
     : '<tr><td class="runs-empty" colspan="4">No runs in this period.</td></tr>';
 }
 
+let runDetailCloseTimer;
+
 function showRunDetails(run, updateUrl = false) {
+  clearTimeout(runDetailCloseTimer);
+  runDetailCloseTimer = undefined;
+  runDetailDialog.classList.remove("is-closing");
   if (updateUrl) {
     const runIndex = importedRuns.indexOf(run);
     if (runIndex !== -1) {
@@ -585,8 +634,6 @@ function showRunDetails(run, updateUrl = false) {
       window.history.pushState(null, "", url);
     }
   }
-  runDetailDialog.classList.remove("is-closing");
-  delete runDetailDialog.dataset.closing;
   const [year, month, day] = run.date.split("-").map(Number);
   const date = formatDate(new Date(year, month - 1, day), {
     weekday: "long",
@@ -850,7 +897,7 @@ function handleProfileHover(event, chartElement) {
   updateRunHover(progress * Math.max(totalPoints - 1, 1));
 }
 
-runRouteChart.addEventListener("pointermove", (event) => {
+function handleRouteHover(event) {
   const svg = runRouteChart.querySelector("svg");
   if (!svg || (selectedHeartRatePoints.length < 2 && selectedElevationPoints.length < 2)) return;
   const bounds = svg.getBoundingClientRect();
@@ -862,10 +909,21 @@ runRouteChart.addEventListener("pointermove", (event) => {
     return distance < closest.distance ? { point, distance } : closest;
   }, { point: selectedRouteCoordinates[0], distance: Infinity }).point;
   updateRunHover(closestPoint.index);
-});
+}
 
-runHeartRateChart.addEventListener("pointermove", (event) => handleProfileHover(event, runHeartRateChart));
-runElevationChart.addEventListener("pointermove", (event) => handleProfileHover(event, runElevationChart));
+for (const [chartElement, inspect] of [
+  [runRouteChart, handleRouteHover],
+  [runHeartRateChart, (event) => handleProfileHover(event, runHeartRateChart)],
+  [runElevationChart, (event) => handleProfileHover(event, runElevationChart)],
+]) {
+  chartElement.addEventListener("pointermove", (event) => {
+    if (event.pointerType !== "touch") inspect(event);
+  });
+  // Touch scrolling cancels the pointer; a completed tap inspects the chart once.
+  chartElement.addEventListener("pointerup", (event) => {
+    if (event.pointerType === "touch") inspect(event);
+  });
+}
 
 function hideRunHover() {
   runRouteChart.querySelector(".run-route-hover-marker")?.setAttribute("visibility", "hidden");
@@ -985,13 +1043,14 @@ async function importGpxFiles(files) {
       return;
     }
     renderRunList(visibleRuns);
+    renderHeatmap();
     if (runDetailDialog.open && selectedRunDetails) showRunDetails(selectedRunDetails);
   }
   if (errors.length) {
     notice.textContent = `${importedCount ? `Imported ${importedCount} GPX route${importedCount === 1 ? "" : "s"}. ` : ""}${errors.join(" ")}`;
     notice.hidden = false;
   } else if (importedCount && !notice.textContent.startsWith("Your activities and routes are loaded")) {
-    showError(`Imported ${importedCount} GPX route${importedCount === 1 ? "" : "s"}.`);
+    showNotice(`Imported ${importedCount} GPX route${importedCount === 1 ? "" : "s"}.`, "success");
   }
   gpxInput.value = "";
 }
@@ -1021,17 +1080,26 @@ runDetailDialog.addEventListener("keydown", (event) => {
 });
 
 function closeRunDetails(updateUrl = true) {
-  if (runDetailDialog.open && !runDetailDialog.dataset.closing) {
+  if (runDetailDialog.open && !runDetailDialog.classList.contains("is-closing")) {
     if (updateUrl) clearRunFromUrl();
-    runDetailDialog.dataset.closing = "true";
     runDetailDialog.classList.add("is-closing");
-    runDetailDialog.addEventListener("animationend", () => {
-      runDetailDialog.close();
-      runDetailDialog.classList.remove("is-closing");
-      delete runDetailDialog.dataset.closing;
-    }, { once: true });
+    runDetailCloseTimer = setTimeout(finishRunDetailsClose, 200);
   }
 }
+
+function finishRunDetailsClose() {
+  clearTimeout(runDetailCloseTimer);
+  runDetailCloseTimer = undefined;
+  if (!runDetailDialog.classList.contains("is-closing")) return;
+  runDetailDialog.close();
+  runDetailDialog.classList.remove("is-closing");
+}
+
+runDetailDialog.addEventListener("animationend", (event) => {
+  if (event.target === runDetailDialog && event.animationName === "run-dialog-fade-out") {
+    finishRunDetailsClose();
+  }
+});
 
 runDetailClose.addEventListener("click", closeRunDetails);
 runDetailDialog.addEventListener("cancel", (event) => {
@@ -1104,10 +1172,13 @@ function renderCalendar(activities, runs) {
       otherActivityCount ? `${otherActivityCount} ${otherActivityCount === 1 ? "other activity" : "other activities"}` : "",
     ].filter(Boolean).join(", ");
     const description = `${fullDate}${activity ? `: ${daySummary} — ${categories.map((category) => activityCategories[category].label).join(", ")}` : ": no activity"}`;
-    const markers = categories.map((category) => `<i class="calendar-marker marker-${category}" aria-hidden="true"></i>`).join("");
-    const stripeStyle = categories.length > 1
-      ? ` style="--activity-stripes: repeating-linear-gradient(135deg, ${categories.map((category, stripeIndex) => `${activityCategories[category].stripe} ${stripeIndex * 8}px ${(stripeIndex + 1) * 8}px`).join(", ")})"`
-      : "";
+    const markers = categories.map(activityIcon).join("");
+    const background = categories.length === 1
+      ? activityCategories[categories[0]].background
+      : `linear-gradient(135deg, ${categories.map((category, index) =>
+        `${activityCategories[category].background} ${index / categories.length * 100}% ${(index + 1) / categories.length * 100}%`,
+      ).join(", ")})`;
+    const backgroundStyle = activity ? ` style="--calendar-background: ${background}"` : "";
     const runTooltip = `<span class="calendar-tooltip" aria-hidden="true"><strong>${escapeHtml(fullDate)}</strong>${activityDetails || "<span>No activity details</span>"}</span>`;
     const activityAccessibleDetails = (activity?.items || []).map((item) => {
       const category = categoryForActivity(item.type);
@@ -1117,7 +1188,7 @@ function renderCalendar(activities, runs) {
     }).join(" ");
     const accessibleDescription = `${description}. ${activityAccessibleDetails}`;
     dayCells.push(
-      `<td class="${activity ? `calendar-active${categories.length === 1 ? ` activity-${categories[0]}` : " activity-mixed"}` : ""}"${activity ? ` data-activity-categories="${categories.join(" ")}"` : ""}${stripeStyle} title="${description}" aria-label="${escapeHtml(accessibleDescription)}"${activity ? ' tabindex="0"' : ""}><span>${day}</span>${markers ? `<span class="calendar-markers">${markers}</span>` : ""}${activity ? runTooltip : ""}</td>`,
+      `<td class="${activity ? `calendar-active${categories.length === 1 ? ` activity-${categories[0]}` : " activity-mixed"}` : ""}"${activity ? ` data-activity-categories="${categories.join(" ")}"` : ""}${backgroundStyle} title="${description}" aria-label="${escapeHtml(accessibleDescription)}"${activity ? ' tabindex="0"' : ""}><span>${day}</span>${markers ? `<span class="calendar-markers">${markers}</span>` : ""}${activity ? runTooltip : ""}</td>`,
     );
   }
 
@@ -1138,7 +1209,7 @@ function renderCalendar(activities, runs) {
     `${monthlyActivities.size} ${monthlyActivities.size === 1 ? "active day" : "active days"}${monthlyCountSummary ? ` · ${monthlyCountSummary}` : ""}`;
   const activeCategories = [...new Set([...monthlyActivities.values()].flatMap((activity) => [...activity.categories]))];
   calendarLegend.innerHTML = activeCategories.length
-    ? activeCategories.map((category) => `<span class="calendar-legend-item" data-category="${category}" tabindex="0" aria-label="Highlight ${activityCategories[category].label} activities"><i class="calendar-legend-dot marker-${category}"></i>${activityCategories[category].label}</span>`).join("")
+    ? activeCategories.map((category) => `<span class="calendar-legend-item" data-category="${category}" tabindex="0" aria-label="Highlight ${activityCategories[category].label} activities">${activityIcon(category)}${activityCategories[category].label}</span>`).join("")
     : '<span class="calendar-legend-empty">No activities this month</span>';
 
   const monthIndexes = activities.map((activity) => {
@@ -1180,13 +1251,49 @@ calendarLegend.addEventListener("focusout", (event) => {
   }
 });
 
-function dateKey(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+function renderSummary() {
+  if (!importedRuns.length) return;
+  const isCalendar = dashboard.dataset.activeView === "calendar";
+  const summary = summarizeTraining(importedRuns, importedActivities, {
+    month: isCalendar ? calendarMonth : null,
+    period: dashboardPeriod.value,
+  });
+  document.querySelector("#summary-distance").textContent = formatDistance(summary.distanceKm);
+  document.querySelector("#summary-runs").textContent = summary.runCount.toLocaleString();
+  document.querySelector("#summary-active-days").textContent = summary.activeDays.toLocaleString();
+  document.querySelector("#summary-period").textContent = isCalendar && calendarMonth
+    ? `${formatDate(calendarMonth, { month: "long", year: "numeric" })} · All activity types`
+    : `${dashboardPeriod.selectedOptions[0].textContent} · All activity types`;
+}
+
+let heatmapRoutesSnapshot;
+let heatmapRunsSnapshot;
+
+function renderHeatmap() {
+  const routesSnapshot = importedRoutes.slice();
+  if (heatmapRunsSnapshot === importedRuns && heatmapRoutesSnapshot
+    && routesSnapshot.length === heatmapRoutesSnapshot.length
+    && routesSnapshot.every((route, index) => route === heatmapRoutesSnapshot[index])) return;
+  heatmapRunsSnapshot = importedRuns;
+  heatmapRoutesSnapshot = routesSnapshot;
+  const runKeys = new Set(importedRuns.map(run => `${run.date}:${categoryForActivity(run.type || "Running")}`));
+  const routes = importedRoutes.filter(route => ["running", "trail"].includes(route.category)
+    && runKeys.has(`${route.date}:${route.category}`));
+  const model = buildRunHeatmap(routes);
+  document.querySelector("#run-heatmap").innerHTML = model.routeCount ? renderRunHeatmap(model) : "";
+  document.querySelector("#run-heatmap-empty").hidden = model.routeCount > 0;
+  document.querySelector("#run-heatmap-legend").hidden = model.maxCount <= 1;
+  document.querySelector("#run-heatmap-summary").textContent = model.routeCount
+    ? `${model.routeCount} ${model.routeCount === 1 ? "run" : "runs"} with GPX · Most visited area: ${model.maxCount} ${model.maxCount === 1 ? "run" : "runs"}`
+    : "No GPX routes imported";
 }
 
 function refreshDashboard() {
   if (importedRuns.length === 0) return;
+  hideChartTooltip();
   renderRuns(importedRuns, dashboardPeriod.value);
+  renderSummary();
+  renderHeatmap();
 }
 
 calendarPrev.addEventListener("click", () => {
@@ -1202,7 +1309,7 @@ function setImportedState() {
   const hasRuns = importedRuns.length > 0;
   dashboard.hidden = !hasRuns;
   dashboardNav.hidden = !hasRuns;
-  dashboardPeriodControl.hidden = !hasRuns;
+  dashboardPeriodControl.hidden = !hasRuns || dashboard.dataset.activeView === "calendar";
   gpxImportButton.hidden = !hasRuns;
   unloadDataButton.hidden = !hasRuns;
   connectState.hidden = hasRuns;
@@ -1250,7 +1357,8 @@ function setDashboardView(view, updateUrl = false) {
 
   for (const button of buttons) {
     const isSelected = button === activeButton;
-    button.setAttribute("aria-selected", String(isSelected));
+    if (isSelected) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
   }
 
   for (const panel of panels) {
@@ -1261,9 +1369,20 @@ function setDashboardView(view, updateUrl = false) {
     else panel.setAttribute("aria-hidden", "true");
   }
 
+  hideChartTooltip();
+  if (dashboard.dataset.activeView !== activeView) {
+    const container = activeView === "runs" ? chart : activeView === "weekday" ? activityFrequencyChart : null;
+    const scroll = container?.querySelector(".running-load-plot-scroll, .frequency-chart-scroll");
+    if (scroll) scroll.scrollLeft = scroll.scrollWidth;
+  }
   if (activeView === "runs") refreshChartLatestButton(chart, runningLoadLatest);
   if (activeView === "weekday") refreshChartLatestButton(activityFrequencyChart, activityTimelineLatest);
   dashboard.dataset.activeView = activeView;
+  document.querySelector("#view-title").textContent = {
+    calendar: "Training calendar", runs: "Your running", weekday: "Activity patterns",
+  }[activeView];
+  dashboardPeriodControl.hidden = !importedRuns.length || activeView === "calendar";
+  refreshDashboard();
   if (activeView !== "runs" && runDetailDialog.open) closeRunDetails(false);
   if (updateUrl) {
     const url = new URL(window.location.href);
@@ -1300,14 +1419,26 @@ async function connectDevReload() {
 }
 
 async function importFile(file) {
-  if (!file) return;
+  if (!file || csvImportInProgress) return;
+  if (!/\.csv$/i.test(file.name)) {
+    showError("Choose a Garmin activities CSV file (.csv).");
+    return;
+  }
+  csvImportInProgress = true;
+  importButtons.forEach((button) => { button.disabled = true; });
+  csvDropZone.setAttribute("aria-busy", "true");
   notice.hidden = true;
   try {
-    const { runs, activities } = parseGarminCsv(await file.text(), "km");
-    importedRuns = runs;
-    importedActivities = activities;
+    const { activities } = parseGarminCsv(await file.text(), "km", { requireRuns: importedRuns.length === 0 });
+    const mergedActivities = mergeActivities(importedActivities, activities);
+    const mergedRuns = runningActivities(mergedActivities);
+    if (runDetailDialog.open) closeRunDetails();
+    clearRunFromUrl();
+    selectedRunDetails = null;
+    importedRuns = mergedRuns;
+    importedActivities = mergedActivities;
     importedFileName = file.name;
-    importedRoutes = importedRoutes.filter((route) => runs.some((run) =>
+    importedRoutes = importedRoutes.filter((route) => mergedRuns.some((run) =>
       run.date === route.date && categoryForActivity(run.type || "Running") === route.category,
     ));
     calendarMonth = null;
@@ -1315,8 +1446,8 @@ async function importFile(file) {
       localStorage.setItem("stride-garmin-runs", JSON.stringify({
         version: 4,
         fileName: importedFileName,
-        runs,
-        activities,
+        runs: mergedRuns,
+        activities: mergedActivities,
         routes: importedRoutes,
         distanceUnit: "m",
       }));
@@ -1327,11 +1458,16 @@ async function importFile(file) {
     refreshDashboard();
   } catch (error) {
     showError(error.message || "Could not read the selected CSV file.");
+  } finally {
+    csvImportInProgress = false;
+    importButtons.forEach((button) => { button.disabled = false; });
+    csvDropZone.removeAttribute("aria-busy");
   }
 }
 
 for (const button of importButtons) {
   button.addEventListener("click", () => {
+    importMenu.open = false;
     csvInput.value = "";
     csvInput.click();
   });
@@ -1340,6 +1476,10 @@ dashboardNav.addEventListener("click", (event) => {
   const button = event.target.closest(".dashboard-nav-item");
   if (!button) return;
   setDashboardView(button.dataset.view, true);
+});
+document.querySelector(".brand").addEventListener("click", (event) => {
+  event.preventDefault();
+  setDashboardView("calendar", true);
 });
 function handleLocationChange() {
   setDashboardView(window.location.hash.slice(1));
@@ -1351,13 +1491,73 @@ setDashboardView(window.location.hash.slice(1));
 connectDevReload();
 csvInput.addEventListener("change", () => importFile(csvInput.files[0]));
 gpxImportButton.addEventListener("click", () => {
+  importMenu.open = false;
   gpxInput.value = "";
   gpxInput.click();
 });
 gpxInput.addEventListener("change", () => importGpxFiles([...gpxInput.files]));
-unloadDataButton.addEventListener("click", unloadImportedData);
+unloadDataButton.addEventListener("click", () => {
+  importMenu.open = false;
+  unloadImportedData();
+});
 dashboardPeriod.addEventListener("change", refreshDashboard);
 rollingPeriod.addEventListener("change", refreshDashboard);
+showRollingTotal.addEventListener("change", refreshDashboard);
+
+// Native details keeps the import actions keyboard accessible without a custom menu widget.
+document.addEventListener("click", (event) => {
+  if (!importMenu.contains(event.target)) importMenu.open = false;
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && importMenu.open) {
+    importMenu.open = false;
+    importMenu.querySelector("summary").focus();
+  }
+});
+document.addEventListener("focusin", (event) => {
+  if (!importMenu.contains(event.target)) importMenu.open = false;
+});
+
+let dragDepth = 0;
+csvDropZone.addEventListener("dragenter", (event) => {
+  event.preventDefault();
+  dragDepth += 1;
+  csvDropZone.classList.add("is-dragging");
+});
+csvDropZone.addEventListener("dragover", (event) => {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "copy";
+});
+csvDropZone.addEventListener("dragleave", () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) csvDropZone.classList.remove("is-dragging");
+});
+csvDropZone.addEventListener("drop", (event) => {
+  event.preventDefault();
+  dragDepth = 0;
+  csvDropZone.classList.remove("is-dragging");
+  const files = [...event.dataTransfer.files];
+  if (files.length !== 1 || !/\.csv$/i.test(files[0].name)) {
+    showError("Choose one Garmin activities CSV file. You can import GPX routes after loading your CSV.");
+    return;
+  }
+  importFile(files[0]);
+});
+// Prevent the browser from navigating away if a file misses the drop target.
+for (const eventName of ["dragover", "drop"]) {
+  window.addEventListener(eventName, (event) => {
+    if ([...event.dataTransfer.types].includes("Files")) event.preventDefault();
+  });
+}
+let resizeTimer;
+let dashboardViewportWidth = window.innerWidth;
+window.addEventListener("resize", () => {
+  if (window.innerWidth === dashboardViewportWidth) return;
+  dashboardViewportWidth = window.innerWidth;
+  hideChartTooltip();
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(refreshDashboard, 150);
+});
 
 try {
   const saved = JSON.parse(localStorage.getItem("stride-garmin-runs") || "null");
@@ -1374,7 +1574,7 @@ try {
         paceSecondsPerKm: Number.isFinite(activity.paceSecondsPerKm) ? activity.paceSecondsPerKm : null,
         averageHeartRate: Number.isFinite(activity.averageHeartRate) ? activity.averageHeartRate : null,
       }))
-      : saved.runs.map((run) => ({ date: run.date, type: "Running" }));
+      : importedRuns.map((run) => ({ ...run, type: run.type || "Running" }));
     importedFileName = saved.fileName || "";
     importedRoutes = Array.isArray(saved.routes) ? saved.routes.filter((route) =>
       typeof route.date === "string"

@@ -1,3 +1,5 @@
+import { mergeActivities, runningActivities } from "./activities.js";
+
 const MILE_UNIT = /\bmi(?:le)?s?\b/i;
 const MILE_IMPORT_ERROR = "Mile-based CSV imports are not supported. Export your activities in kilometers from Garmin Connect and try again.";
 
@@ -81,6 +83,17 @@ function parseDistance(value) {
   return Number.isFinite(distance) && distance > 0 ? distance : null;
 }
 
+function parseActivityStartTime(value, date) {
+  const match = value.trim().match(/[T\s](\d{1,2}):(\d{2})(?::(\d{2})(\.\d+)?)?(?:\s*(AM|PM))?/i);
+  if (!match) return null;
+  let hour = Number(match[1]);
+  const meridiem = match[5]?.toUpperCase();
+  if (meridiem) hour = hour % 12 + (meridiem === "PM" ? 12 : 0);
+  if (hour > 23 || Number(match[2]) > 59 || Number(match[3] || 0) > 59) return null;
+  const fraction = (match[4] || "").replace(/0+$/, "").replace(/\.$/, "");
+  return `${date}T${String(hour).padStart(2, "0")}:${match[2]}:${match[3] || "00"}${fraction}`;
+}
+
 function parseTimeSeconds(value) {
   const match = value.trim().match(/^(\d+):([0-5]?\d)(?::([0-5]?\d))?$/);
   if (!match) return null;
@@ -117,7 +130,7 @@ export function normalizeStoredRuns(runs, distanceUnit) {
   }));
 }
 
-export function parseGarminCsv(text, fallbackUnit = "km") {
+export function parseGarminCsv(text, fallbackUnit = "km", { requireRuns = true } = {}) {
   const rows = parseRows(text);
   if (rows.length < 2) throw new Error("The CSV has no activity rows.");
 
@@ -151,7 +164,6 @@ export function parseGarminCsv(text, fallbackUnit = "km") {
     throw new Error(MILE_IMPORT_ERROR);
   }
   const multiplier = unit === "m" ? 0.001 : 1;
-  const runs = [];
   const activities = [];
 
   for (const row of rows.slice(1)) {
@@ -159,6 +171,7 @@ export function parseGarminCsv(text, fallbackUnit = "km") {
     if (!activityType) continue;
     const date = parseActivityDate(row[dateIndex] || "");
     if (!date) continue;
+    const startTime = parseActivityStartTime(row[dateIndex] || "", date);
     const distance = parseDistance(row[distanceIndex] || "");
     const distanceMeters = distance === null ? null : distance * multiplier * 1000;
     const averagePace = paceIndex === -1
@@ -177,19 +190,19 @@ export function parseGarminCsv(text, fallbackUnit = "km") {
       durationSeconds,
       paceSecondsPerKm,
       averageHeartRate: Number.isFinite(averageHeartRate) ? averageHeartRate : null,
+      ...(startTime ? { startTime } : {}),
       ...(activityIdIndex !== -1 && (row[activityIdIndex] || "").trim()
         ? { activityId: (row[activityIdIndex] || "").trim() }
         : {}),
     };
     activities.push(activity);
-
-    if (/(run|running|trail)/i.test(activityType) && distanceMeters !== null) {
-      runs.push({ ...activity, distance: distanceMeters });
-    }
   }
 
-  if (runs.length === 0) {
+  const uniqueActivities = mergeActivities([], activities);
+  const runs = runningActivities(uniqueActivities);
+  if (requireRuns && runs.length === 0) {
     throw new Error("No running activities with valid dates and distances were found in this CSV.");
   }
-  return { runs, activities, unit };
+  if (uniqueActivities.length === 0) throw new Error("No valid activities were found in this CSV.");
+  return { runs, activities: uniqueActivities, unit };
 }

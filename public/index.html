@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#0d1720">
+    <meta name="theme-color" content="#0d141c">
     <title>Stride</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,43 +13,52 @@
   <body>
     <div class="app-shell">
       <header class="topbar">
+        <a class="brand" href="#calendar" aria-label="Stride home">
+          <svg viewBox="0 0 28 28" aria-hidden="true"><path d="M4 21 12 7l4 7h8M8 21l5-8M17 21l4-7"/></svg>
+          Stride<span class="brand-caption">Training journal</span>
+        </a>
         <nav class="dashboard-nav" id="dashboard-nav" aria-label="Dashboard sections" hidden>
-          <button class="dashboard-nav-item" type="button" data-view="calendar" aria-controls="calendar-view" aria-selected="true">Calendar</button>
-          <button class="dashboard-nav-item" type="button" data-view="runs" aria-controls="runs-view" aria-selected="false">Runs</button>
-          <button class="dashboard-nav-item" type="button" data-view="weekday" aria-controls="weekday-view" aria-selected="false">Frequencies</button>
+          <button class="dashboard-nav-item" type="button" data-view="calendar" aria-controls="calendar-view" aria-current="page">Calendar</button>
+          <button class="dashboard-nav-item" type="button" data-view="runs" aria-controls="runs-view">Runs</button>
+          <button class="dashboard-nav-item" type="button" data-view="weekday" aria-controls="weekday-view">Patterns</button>
         </nav>
-        <div class="topbar-controls">
-          <label class="topbar-period range-select" id="dashboard-period-control" hidden>
-            <span>Time period</span>
-            <select id="dashboard-period" aria-label="Dashboard time period">
-              <option value="30">Last 30 days</option>
-              <option value="90" selected>Last 90 days</option>
-              <option value="180">Last 6 months</option>
-              <option value="365">Last year</option>
-              <option value="all">All imported</option>
-            </select>
-          </label>
-          <div class="topbar-actions">
-            <span class="sync-label"><span class="status-dot"></span><span id="connection-label">No activities imported</span></span>
-            <button class="action-button gpx-import-button" id="gpx-import-button" type="button" hidden>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18c3-8 5-8 8-3s5 5 8-9"/><circle cx="4" cy="18" r="1.5"/><circle cx="20" cy="6" r="1.5"/></svg>
-              Import GPX
-            </button>
-            <button class="action-button" id="import-button" type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
-              Import CSV
-            </button>
-            <button class="unload-button" id="unload-data-button" type="button" hidden>Unload data</button>
-          </div>
+        <div class="topbar-actions">
+          <details class="import-menu" id="import-menu">
+            <summary class="action-button">Import <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>
+            <div class="import-menu-panel">
+              <button class="import-menu-item" id="import-button" type="button"><strong>Import CSV</strong><span>Add or update your activities</span></button>
+              <button class="import-menu-item" id="gpx-import-button" type="button" hidden><strong>Import GPX</strong><span>Add routes to your runs</span></button>
+              <button class="import-menu-item unload-button" id="unload-data-button" type="button" hidden>Unload data</button>
+            </div>
+          </details>
         </div>
       </header>
 
       <main>
+        <div class="notice" id="notice" role="alert" hidden></div>
         <section class="dashboard" id="dashboard" hidden>
+          <div class="page-heading">
+            <div><p class="eyebrow">Your training</p><h1 id="view-title">Training calendar</h1><p class="page-description" id="summary-period"></p></div>
+            <label class="range-select" id="dashboard-period-control" hidden>
+              <span>Time period</span>
+              <select id="dashboard-period" aria-label="Dashboard time period">
+                <option value="30">Last 30 days</option>
+                <option value="90" selected>Last 90 days</option>
+                <option value="180">Last 6 months</option>
+                <option value="365">Last year</option>
+                <option value="all">All imported</option>
+              </select>
+            </label>
+          </div>
+          <dl class="summary-grid" aria-label="Training summary">
+            <div><dt>Running distance</dt><dd><span id="summary-distance">0.0</span><span class="stat-unit">km</span><span class="stat-note">Running and trail running</span></dd></div>
+            <div><dt>Runs</dt><dd><span id="summary-runs">0</span><span class="stat-note">Individual running activities</span></dd></div>
+            <div><dt>Active days</dt><dd><span id="summary-active-days">0</span><span class="stat-note">Across all activity types</span></dd></div>
+          </dl>
           <section class="calendar-card dashboard-view" id="calendar-view" aria-labelledby="calendar-title">
             <div class="calendar-heading">
               <div>
-                <h2 id="calendar-title">Running calendar</h2>
+                <h2 id="calendar-title">Activity calendar</h2>
                 <p id="calendar-summary">Activity days are marked</p>
               </div>
               <div class="calendar-controls">
@@ -75,9 +84,10 @@
             <div class="chart-heading">
               <div>
                 <div class="chart-title-row"><h2>Running load</h2></div>
-                <p>Daily distance with configurable rolling average and total</p>
+                <p>Daily distance and your rolling average</p>
               </div>
               <div class="chart-options">
+                <label class="toggle-control"><input id="show-rolling-total" type="checkbox"><span>Show rolling total</span></label>
                 <div class="chart-selectors">
                   <label class="range-select">
                     <span>Rolling window</span>
@@ -96,12 +106,22 @@
               <div class="legend" aria-label="Chart legend">
                 <span><i class="legend-bar"></i> Daily distance</span>
                 <span><i class="legend-line"></i><span id="average-legend-label">7-day average</span></span>
-                <span><i class="legend-total-line"></i><span id="total-legend-label">7-day total</span></span>
+                <span id="total-legend" hidden><i class="legend-total-line"></i><span id="total-legend-label">7-day total</span></span>
               </div>
               <button class="chart-latest-button" id="running-load-latest" type="button" hidden><span aria-hidden="true">→</span> Latest</button>
             </div>
-            <div class="chart-footer"><span>REST DAYS ARE PART OF THE TRAINING.</span><span id="chart-range"></span></div>
+            <div class="chart-footer"><span>Distance in km · Average in km/day</span><span id="chart-range"></span></div>
           </article>
+          <details class="chart-card heatmap-card" aria-labelledby="run-heatmap-title">
+            <summary class="chart-heading heatmap-heading">
+              <div><h2 id="run-heatmap-title">Running heatmap</h2><p>All imported running routes · Warmer colors show more runs</p></div>
+              <svg class="heatmap-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5"/></svg>
+            </summary>
+            <div id="run-heatmap" class="run-heatmap"></div>
+            <p id="run-heatmap-empty" class="heatmap-empty">Import GPX files from the Import menu to see where you run.</p>
+            <div class="chart-footer"><span>All time · North ↑</span><span id="run-heatmap-summary">No GPX routes imported</span></div>
+            <div id="run-heatmap-legend" class="heatmap-legend" hidden><span>Fewer runs</span><i aria-hidden="true"></i><span>More runs</span></div>
+          </details>
           <section class="runs-card" aria-labelledby="runs-title">
             <div class="runs-heading">
               <div>
@@ -118,7 +138,7 @@
                 <tbody id="runs-list"></tbody>
               </table>
             </div>
-            <p class="pace-note">Pace uses activity duration when available; otherwise Garmin's average pace is used.</p>
+            <p class="pace-note">Pace is shown in min/km. Garmin’s average pace is used when available; otherwise it is calculated from duration.</p>
           </section>
           </div>
           <div class="dashboard-view" id="weekday-view" hidden>
@@ -191,37 +211,40 @@
           </nav>
         </dialog>
 
-        <section class="connect-state" id="connect-state" hidden>
-          <div class="connect-art" aria-hidden="true">
-            <div class="art-circle art-circle-outer"></div>
-            <div class="art-circle art-circle-middle"></div>
-            <div class="art-circle art-circle-inner"></div>
-            <div class="art-route"><span>✳</span></div>
-            <div class="art-runner">↗</div>
-          </div>
+        <section class="connect-state" id="connect-state" aria-labelledby="welcome-title" hidden>
           <div class="connect-content">
-            <span class="welcome-eyebrow">WELCOME TO STRIDE</span>
-            <h2>Bring your runs to life</h2>
-            <p>First, download your activities from Garmin Connect:</p>
-            <ol class="welcome-steps">
-              <li>Sign in to Garmin Connect and open <strong>Activities → All Activities</strong>.</li>
-              <li>Scroll to the bottom of the activity list and choose <strong>Export CSV</strong>.</li>
-              <li>Select the downloaded CSV file below to explore your activities.</li>
-            </ol>
-            <button class="action-button connect-cta" id="import-cta" type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
-              Choose Garmin CSV
-            </button>
-            <p class="welcome-gpx-note">Have GPX files too? Import them after loading your CSV to see routes, heart rate, and elevation.</p>
-            <span class="privacy-note"><span>⌑</span> Your data stays on this device. Nothing is uploaded.</span>
+            <p class="eyebrow">Your personal training journal</p>
+            <h1 id="welcome-title">A clearer view of your training.</h1>
+            <p class="welcome-description">See your running load, explore your routes, and find the patterns in your activity.</p>
+            <div class="drop-zone" id="csv-drop-zone" role="region" aria-label="Drop a Garmin CSV file">
+              <svg class="upload-icon" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 21V5m-6 6 6-6 6 6M6 21v6h20v-6"/></svg>
+              <h2>Drop your Garmin CSV here</h2>
+              <p>or choose a file from your device</p>
+              <button class="action-button connect-cta" id="import-cta" type="button">Choose CSV file</button>
+              <span class="file-requirement">Garmin activities CSV · Metric units (km) only</span>
+            </div>
+            <details class="export-help">
+              <summary>Choose a file from Dropbox on iPhone</summary>
+              <p>Tap <strong>Choose CSV file → Choose File → Browse → Dropbox</strong>. If Dropbox is missing, install and sign in to the Dropbox app, then open <strong>Files → Browse → … → Edit</strong> and enable Dropbox.</p>
+            </details>
+            <details class="export-help">
+              <summary>How to export from Garmin Connect</summary>
+              <ol class="welcome-steps">
+                <li>Set your Garmin Connect units to <strong>metric (kilometers)</strong>.</li>
+                <li>Open <strong>Activities → All Activities</strong> in Garmin Connect on the web.</li>
+                <li>Scroll to the bottom of the list, choose <strong>Export CSV</strong>, and import the file here.</li>
+              </ol>
+              <p>CSV files without unit labels are treated as kilometers.</p>
+            </details>
+            <p class="welcome-gpx-note">You can add GPX routes, heart rate, and elevation after importing your activities.</p>
+            <p class="privacy-note"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="9" width="12" height="8" rx="2"/><path d="M7 9V6a3 3 0 0 1 6 0v3"/></svg> Your activity data stays in this browser.</p>
           </div>
         </section>
 
         <input id="csv-input" type="file" accept=".csv,text/csv" hidden>
         <input id="gpx-input" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" multiple hidden>
-        <div class="notice" id="notice" role="alert" hidden></div>
       </main>
-      <footer><span>MADE FOR THE LOVE OF THE LONG RUN</span><span>STRIDE <b>·</b> 2026</span></footer>
+      <footer><span>Stride · Personal training journal</span><span class="sync-label"><span class="status-dot"></span><span id="connection-label">No activities imported</span></span></footer>
     </div>
     <script type="module" src="app.js"></script>
   </body>
