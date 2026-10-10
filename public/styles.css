@@ -291,6 +291,7 @@ h1 span, .connect-content h2 span { color: var(--blue-2); }
 footer { min-height: 58px; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; color: #39443d; font-size: 10px; font-weight: 600; letter-spacing: .7px; }
 footer b { color: var(--brown); }
 [hidden] { display: none !important; }
+.connect-state[hidden] { display: none; }
 
 body { background: var(--paper); color: var(--ink); }
   .action-button { background: #795536; color: #fff; }

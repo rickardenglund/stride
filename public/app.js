@@ -1408,4 +1408,5 @@ try {
 } catch {
   showError("Saved activities could not be read. Please import the Garmin CSV again.");
 }
+setImportedState();
 syncRunDetailsFromUrl();
