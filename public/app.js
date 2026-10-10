@@ -1,6 +1,7 @@
 import { normalizeStoredRuns, parseGarminCsv } from "./csv.js";
 import { mergeActivities, runningActivities } from "./activities.js";
 import { dateKey, distanceScale, summarizeTraining } from "./training.js";
+import { projectMapRoutes, mountBackgroundMap } from "./maps.js";
 import { buildRunHeatmap, renderRunHeatmap } from "./heatmap.js";
 
 const dashboard = document.querySelector("#dashboard");
@@ -672,7 +673,8 @@ function showRunDetails(run, updateUrl = false) {
     : "Browse activities in Garmin Connect ↗";
   selectedRouteCoordinates = route ? getRouteSvgCoordinates(route.points) : [];
   runRouteSection.hidden = !route;
-  runRouteChart.innerHTML = route ? renderRouteSvg(route.points) : "";
+  mountBackgroundMap(runRouteChart, route ? renderRouteSvg(route.points) : "",
+    route ? projectMapRoutes([route.points], 640, 250, 22).bounds : null);
   const routeElevations = route?.points.map((point) => point.elevation).filter(Number.isFinite) || [];
   runRouteFilename.textContent = route
     ? `${route.fileName}${routeElevations.length ? ` · Elevation ${Math.round(Math.min(...routeElevations))}–${Math.round(Math.max(...routeElevations))} m` : ""}`
@@ -723,32 +725,7 @@ function syncRunDetailsFromUrl() {
 }
 
 function getRouteSvgCoordinates(points) {
-  const middleLatitude = points.reduce((sum, point) => sum + point.lat, 0) / points.length * Math.PI / 180;
-  const longitudeScale = Math.cos(middleLatitude);
-  const minLat = Math.min(...points.map((point) => point.lat));
-  const minLon = Math.min(...points.map((point) => point.lon));
-  const width = 640;
-  const height = 250;
-  const rawCoordinates = points.map((point, index) => ({
-    index: point.index ?? index,
-    routeX: (point.lon - minLon) * 111320 * longitudeScale,
-    routeY: (point.lat - minLat) * 111320,
-  }));
-  const minX = Math.min(...rawCoordinates.map(({ routeX }) => routeX));
-  const maxX = Math.max(...rawCoordinates.map(({ routeX }) => routeX));
-  const minY = Math.min(...rawCoordinates.map(({ routeY }) => routeY));
-  const maxY = Math.max(...rawCoordinates.map(({ routeY }) => routeY));
-  const projectedXRange = Math.max(maxX - minX, 1e-9);
-  const projectedYRange = Math.max(maxY - minY, 1e-9);
-  const padding = 22;
-  const scale = Math.min((width - padding * 2) / projectedXRange, (height - padding * 2) / projectedYRange);
-  const offsetX = (width - projectedXRange * scale) / 2;
-  const offsetY = (height - projectedYRange * scale) / 2;
-  return rawCoordinates.map((point) => ({
-    ...point,
-    routeX: offsetX + (point.routeX - minX) * scale,
-    routeY: height - offsetY - (point.routeY - minY) * scale,
-  }));
+  return projectMapRoutes([points], 640, 250, 22).coordinates[0];
 }
 
 function renderRouteSvg(points) {
@@ -1280,7 +1257,8 @@ function renderHeatmap() {
   const routes = importedRoutes.filter(route => ["running", "trail"].includes(route.category)
     && runKeys.has(`${route.date}:${route.category}`));
   const model = buildRunHeatmap(routes);
-  document.querySelector("#run-heatmap").innerHTML = model.routeCount ? renderRunHeatmap(model) : "";
+  mountBackgroundMap(document.querySelector("#run-heatmap"),
+    model.routeCount ? renderRunHeatmap(model) : "", model.bounds);
   document.querySelector("#run-heatmap-empty").hidden = model.routeCount > 0;
   document.querySelector("#run-heatmap-legend").hidden = model.maxCount <= 1;
   document.querySelector("#run-heatmap-summary").textContent = model.routeCount

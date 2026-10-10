@@ -1,3 +1,5 @@
+import { projectMapRoutes } from "./maps.js";
+
 // Count each route once per cell, independent of GPS sampling density.
 export function buildRunHeatmap(routes) {
   const width = 800, height = 400, cellSize = 5, padding = 20;
@@ -6,28 +8,11 @@ export function buildRunHeatmap(routes) {
     && Number.isFinite(point.lon) && Math.abs(point.lon) <= 180,
   )).filter(points => points.length >= 2);
   if (!validRoutes.length) return { cells: [], routeCount: 0, maxCount: 0, width, height, cellSize };
-  const origin = validRoutes[0][0].lon;
-  let minLat = Infinity, maxLat = -Infinity;
-  for (const points of validRoutes) for (const point of points) {
-    minLat = Math.min(minLat, point.lat);
-    maxLat = Math.max(maxLat, point.lat);
-  }
-  const longitudeScale = Math.max(Math.cos((minLat + maxLat) / 2 * Math.PI / 180), .0001);
-  let minX = Infinity, maxX = -Infinity;
-  const projected = validRoutes.map(points => points.map(point => {
-    const x = (((point.lon - origin + 540) % 360) - 180) * longitudeScale;
-    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-    return { x, y: point.lat };
-  }));
-  const scale = Math.min((width - padding * 2) / Math.max(maxX - minX, 1e-9),
-    (height - padding * 2) / Math.max(maxLat - minLat, 1e-9));
-  const offsetX = (width - (maxX - minX) * scale) / 2;
-  const offsetY = (height - (maxLat - minLat) * scale) / 2;
+  const { bounds, coordinates } = projectMapRoutes(validRoutes, width, height, padding);
   const counts = new Map();
-  for (const points of projected) {
+  for (const points of coordinates) {
     const visited = new Set();
-    const pixels = points.map(point => ({ x: offsetX + (point.x - minX) * scale,
-      y: height - offsetY - (point.y - minLat) * scale }));
+    const pixels = points.map(point => ({ x: point.routeX, y: point.routeY }));
     for (let i = 1; i < pixels.length; i++) {
       const a = pixels[i - 1], b = pixels[i];
       const steps = Math.max(1, Math.ceil(Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)) / (cellSize / 2)));
@@ -43,7 +28,7 @@ export function buildRunHeatmap(routes) {
     const [x, y] = key.split(',').map(Number);
     return { x: x * cellSize, y: y * cellSize, count };
   });
-  return { cells, routeCount: validRoutes.length, maxCount: Math.max(...counts.values()), width, height, cellSize };
+  return { cells, bounds, routeCount: validRoutes.length, maxCount: Math.max(...counts.values()), width, height, cellSize };
 }
 
 export function renderRunHeatmap(model) {

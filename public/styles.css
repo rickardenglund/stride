@@ -84,6 +84,15 @@ main { flex: 1; min-width: 0; }
 .heatmap-card:not([open]) .heatmap-chevron { transform: rotate(-90deg); }
 .run-heatmap { margin-top: 20px; overflow: hidden; border-radius: 8px; background: var(--paper); }
 .run-heatmap svg { display: block; width: 100%; height: auto; }
+.run-heatmap:not(:empty) { aspect-ratio: 2 / 1; min-height: 240px; }
+.run-route-chart { aspect-ratio: 640 / 250; min-height: 200px; }
+.run-heatmap.leaflet-container, .run-route-chart.leaflet-container { background: var(--paper); isolation: isolate; }
+.run-heatmap .leaflet-tile-pane, .run-route-chart .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) saturate(.25) brightness(.75) contrast(.9); }
+.training-map-overlay { overflow: visible; }
+.leaflet-container .training-map-overlay { max-width: none; }
+.leaflet-container .leaflet-control-attribution { color: #24313b; font-size: 10px; }
+.leaflet-container .leaflet-control-attribution a { color: #155e9b; }
+.leaflet-container .leaflet-control-zoom a { color: #24313b; }
 .heatmap-empty { padding: 48px 16px; color: var(--muted); text-align: center; font-size: 13px; }
 .heatmap-legend { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 14px; color: var(--muted); font-size: 12px; }
 .heatmap-legend i { width: 120px; height: 8px; border-radius: 4px; background: linear-gradient(to right, #7f1d1d, #b93838, #ef4444, #fb923c, #fde047); }

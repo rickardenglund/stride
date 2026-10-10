@@ -26,7 +26,9 @@ The browser saves imported runs on this device, so the dashboard is available af
 
 The Calendar summary follows the visible month. In Runs and Patterns, the summary follows the time period selected above the content. Enable **Show rolling total** in Runs to add the cumulative distance for each rolling window to the chart. The **Import** menu contains CSV import, GPX import, and **Unload data**.
 
-The Runs view includes a **Running heatmap** of all imported running and trail-running GPX routes, independent of the period filter. Routes share geographic positions with north at the top. Warmer colors indicate more runs passing through the same area; each run counts once per area. The heatmap stays in your browser and does not load an external map.
+The Runs view includes a collapsible **Running heatmap** of all imported running and trail-running GPX routes, independent of the period filter. Routes share geographic positions with north at the top. Warmer colors indicate more runs passing through the same area; each run counts once per area.
+
+The heatmap and activity modal show OpenStreetMap backgrounds with zoom and pan controls. Maps initialize when visible. Leaflet 1.9.4 loads from unpkg, and map tiles load from OpenStreetMap; these requests reveal the viewed map area to the tile service. Activity files remain in your browser. If Leaflet cannot load, route shapes remain available without the background. Tile usage follows the [OpenStreetMap tile policy](https://operations.osmfoundation.org/policies/tiles/), including visible attribution and normal browser caching.
 
 ## Publish with GitHub Pages
 
