@@ -44,6 +44,7 @@ test('the default includes running and trail variants, including after routes ar
   assert.deepEqual(defaultHeatmapSelection(groupedTypes), new Set(['running', 'trail running', 'treadmill running']));
   assert.deepEqual(heatmapGroupTypes('group:cycling', groupedTypes), ['cycling', 'road cycling', 'gravel/unpaved cycling']);
   assert.deepEqual(heatmapGroupTypes('group:walking', groupedTypes), ['walking', 'hiking']);
+  assert.deepEqual(heatmapGroupTypes('group:climbing', ['bouldering', 'indoor climbing', 'rock climbing', 'running']), ['bouldering', 'indoor climbing']);
 });
 
 test('groups combine with other selections and clearing a group only removes its members', () => {

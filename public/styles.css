@@ -422,3 +422,6 @@ footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: s
 .import-help ol { margin: 0 0 10px; padding-left: 18px; }
 .import-help li + li { margin-top: 8px; }
 .import-help a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+
+.weekday-group-row th, .weekday-group-row td { font-weight: 600; }
+.weekday-table .weekday-section-row th { padding-top: 18px; border-top: 1px solid var(--line); text-align: left; text-transform: uppercase; letter-spacing: .06em; font-size: 11px; }

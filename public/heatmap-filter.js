@@ -2,6 +2,7 @@ export const HEATMAP_TYPE_GROUPS = [
   { id: 'group:running', label: 'Running / Trail', matches: type => /run|trail/.test(type) },
   { id: 'group:cycling', label: 'Cycling / Gravel', matches: type => /cycl|bik/.test(type) },
   { id: 'group:walking', label: 'Walking / Hiking', matches: type => /walk|hik/.test(type) },
+  { id: 'group:climbing', label: 'Bouldering / Indoor Climbing', matches: type => type === 'bouldering' || type === 'indoor climbing' },
 ];
 
 export function heatmapGroupTypes(id, types) {

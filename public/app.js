@@ -1,3 +1,4 @@
+import { groupActivitiesByWeekday } from "./weekday.js";
 import { normalizeHeatmapSelection, toggleHeatmapType, selectedHeatmapRoutes, HEATMAP_TYPE_GROUPS, heatmapGroupTypes, heatmapOptionState, defaultHeatmapSelection } from "./heatmap-filter.js";
 import { loadImportedData, saveImportedData, clearImportedData } from "./storage.js";
 import { routeMatchesActivity, mergeRoutes } from "./routes.js";
@@ -468,7 +469,6 @@ function renderRuns(runs, days) {
 
 function renderWeekdayFrequency(activities, period) {
   const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const counts = new Map();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayKey = dateKey(today);
@@ -481,43 +481,33 @@ function renderWeekdayFrequency(activities, period) {
   );
   renderActivityTimeline(periodActivities, period, start, today);
 
-  for (const activity of periodActivities) {
-    const [year, month, day] = activity.date.split("-").map(Number);
-    const weekday = (new Date(year, month - 1, day).getDay() + 6) % 7;
-    const category = categoryForActivity(activity.type);
-    const categoryCounts = counts.get(category) || Array(weekdays.length).fill(0);
-    categoryCounts[weekday] += 1;
-    counts.set(category, categoryCounts);
-  }
+  const grouped = groupActivitiesByWeekday(periodActivities);
 
   document.querySelector("#weekday-description").textContent = period === "all"
     ? `Activity counts across all ${periodActivities.length} imported activities, grouped by weekday`
     : `Activity counts for the last ${period} days, grouped by weekday (${periodActivities.length} activities)`;
-  if (!counts.size) {
+  if (!periodActivities.length) {
     weekdayFrequency.innerHTML = '<tr><td class="weekday-empty" colspan="8">No activities in this period.</td></tr>';
     return;
   }
 
-  const allCounts = Array(weekdays.length).fill(0);
-  for (const categoryCounts of counts.values()) {
-    categoryCounts.forEach((count, weekday) => {
-      allCounts[weekday] += count;
-    });
-  }
-  const renderRow = (label, rowCounts, category = null) => {
+  const renderRow = (label, rowCounts, category = null, isGroup = false) => {
     const maximum = Math.max(...rowCounts);
     const cells = rowCounts.map((count, weekday) => {
       const level = count ? Math.max(1, Math.ceil((count / maximum) * 4)) : 0;
-      const accessibleCount = `${label} on ${weekdays[weekday]}: ${count} ${count === 1 ? "activity" : "activities"}`;
+      const accessibleCount = escapeHtml(`${label} on ${weekdays[weekday]}: ${count} ${count === 1 ? "activity" : "activities"}`);
       return `<td class="weekday-frequency-cell level-${level}" aria-label="${accessibleCount}" title="${accessibleCount}">${count || "—"}</td>`;
     }).join("");
     const marker = category ? `<i class="calendar-legend-dot marker-${category}" aria-hidden="true"></i>` : "";
-    return `<tr${category ? "" : ' class="weekday-total-row"'}><th scope="row"><span class="weekday-activity-name">${marker}${label}</span></th>${cells}</tr>`;
+    return `<tr${isGroup ? ' class="weekday-group-row"' : ""}><th scope="row"><span class="weekday-activity-name">${marker}${escapeHtml(label)}</span></th>${cells}</tr>`;
   };
 
-  const rows = [...counts.entries()]
-    .map(([category, categoryCounts]) => renderRow(activityCategories[category].label, categoryCounts, category));
-  rows.push(renderRow("All activities", allCounts));
+  const rows = [renderRow("All activities", grouped.all, null, true),
+    ...grouped.groups.map(group => renderRow(group.label, group.counts, null, true)),
+    '<tr class="weekday-section-row"><th colspan="8" scope="colgroup">Individual types</th></tr>',
+    ...grouped.types.map(([type, counts]) => renderRow(
+      type.replace(/\b[a-z]/g, character => character.toUpperCase()), counts, categoryForActivity(type))),
+  ];
   weekdayFrequency.innerHTML = rows.join("");
 }
 
@@ -1336,9 +1326,10 @@ function updateHeatmapTypeChoices(rebuild) {
     ? normalizeHeatmapSelection(heatmapTypeSelection, types) : defaultHeatmapSelection(types);
   if (rebuild) {
     const countTypes = members => members.reduce((sum, type) => sum + heatmapGroups.get(type).length, 0);
+    const byCount = (left, right) => right[2] - left[2] || left[1].localeCompare(right[1]);
     const shortcuts = [['all', 'All', countTypes(types)],
-      ...HEATMAP_TYPE_GROUPS.map(group => [group.id, group.label, countTypes(heatmapGroupTypes(group.id, types))])];
-    const individual = types.map(type => [type, type.replace(/\b[a-z]/g, character => character.toUpperCase()), heatmapGroups.get(type).length]);
+      ...HEATMAP_TYPE_GROUPS.map(group => [group.id, group.label, countTypes(heatmapGroupTypes(group.id, types))]).sort(byCount)];
+    const individual = types.map(type => [type, type.replace(/\b[a-z]/g, character => character.toUpperCase()), heatmapGroups.get(type).length]).sort(byCount);
     const renderOptions = options => options.map(([type, label, count]) =>
       `<label class="heatmap-type-option"><input type="checkbox" value="${escapeHtml(type)}" aria-controls="run-heatmap"${count ? '' : ' disabled'}><span>${escapeHtml(label)} (${count})</span></label>`).join('');
     heatmapTypeChoices.innerHTML = `<div class="heatmap-type-shortcuts" role="group" aria-label="Activity groups">${renderOptions(shortcuts)}</div>
