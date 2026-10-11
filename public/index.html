@@ -78,9 +78,16 @@
                 <p id="calendar-summary">Activity days are marked</p>
               </div>
               <div class="calendar-controls">
-                <button class="calendar-nav" id="calendar-prev" type="button" aria-label="Previous month">‹</button>
-                <span id="calendar-month" aria-live="polite"></span>
-                <button class="calendar-nav" id="calendar-next" type="button" aria-label="Next month">›</button>
+                <div class="calendar-control-row" role="group" aria-label="Choose month">
+                  <button class="calendar-nav" id="calendar-prev" type="button" aria-label="Previous month">‹</button>
+                  <span id="calendar-month" aria-live="polite"></span>
+                  <button class="calendar-nav" id="calendar-next" type="button" aria-label="Next month">›</button>
+                </div>
+                <div class="calendar-control-row" role="group" aria-label="Choose year">
+                  <button class="calendar-nav" id="calendar-prev-year" type="button" aria-label="Previous year" title="Previous year">«</button>
+                  <span id="calendar-year" aria-live="polite"></span>
+                  <button class="calendar-nav" id="calendar-next-year" type="button" aria-label="Next year" title="Next year">»</button>
+                </div>
               </div>
             </div>
             <table class="calendar-table" aria-labelledby="calendar-title">

@@ -1,3 +1,4 @@
+import { chartDataRange, chartLabelIndices } from "./chart-range.js";
 import { bindChartInspection } from "./chart-inspection.js";
 import { mergeSleep, renderSleep } from "./sleep.js";
 import { groupActivitiesByWeekday, renderWeekdayBars } from "./weekday.js";
@@ -251,11 +252,10 @@ function makeChart(daily, dates, rollingAverage, rollingTotals, averageDays, tot
   const totalPoints = rollingTotals.map((value, index) => `${x(index)},${y(value)}`);
   const totalPath = totalPoints.map((point, index) => `${index === 0 ? "M" : "L"}${point}`).join(" ");
   const areaPath = `${linePath} L${x(dates.length - 1)},${y(0)} L${x(0)},${y(0)} Z`;
-  const labelStep = Math.max(1, Math.ceil(80 * (dates.length - 1) / plotWidth));
-  const labels = dates.map((date, index) => {
-    if (index % labelStep !== 0 && index !== dates.length - 1) return "";
-    const label = formatDate(date, { month: "short", day: "numeric" });
-    return `<text class="axis-label" x="${x(index)}" y="${height - 9}" text-anchor="middle">${label}</text>`;
+  const labels = chartLabelIndices(dates.length, plotWidth / Math.max(1, dates.length - 1)).map(index => {
+    const label = formatDate(dates[index], { month: "short", day: "numeric", year: "2-digit" });
+    const anchor = index === 0 ? "start" : index === dates.length - 1 ? "end" : "middle";
+    return `<text class="axis-label" x="${x(index)}" y="${height - 9}" text-anchor="${anchor}">${label}</text>`;
   }).join("");
   const windowLabel = (index, windowDays) => {
     const start = new Date(dates[index]);
@@ -440,15 +440,24 @@ function renderRuns(runs, days) {
     const start = Math.max(0, index - windowDays + 1);
     return daily.slice(start, index + 1).reduce((sum, distance) => sum + distance, 0);
   });
-  const visibleDaily = daily.slice(lookback);
-  const visibleRolling = rollingAverage.slice(lookback);
-  const visibleTotals = rollingTotals.slice(lookback);
-  const visibleDates = dates.slice(lookback);
+  const range = chartDataRange(daily.slice(lookback), distance => distance > 0);
+  const visibleDaily = daily.slice(lookback + range.start, lookback + range.end);
+  const visibleRolling = rollingAverage.slice(lookback + range.start, lookback + range.end);
+  const visibleTotals = rollingTotals.slice(lookback + range.start, lookback + range.end);
+  const visibleDates = dates.slice(lookback + range.start, lookback + range.end);
   const timePeriodDescription = dashboardPeriod.value === "all" ? "all imported dates" : `the last ${days} days`;
   const periodRuns = runs
-    .filter((run) => run.date >= dateKey(visibleDates[0]) && run.date <= dateKey(visibleDates.at(-1)))
+    .filter((run) => run.date >= dateKey(dates[lookback]) && run.date <= dateKey(dates.at(-1)))
     .sort((left, right) => right.date.localeCompare(left.date));
   const runningLoadChart = document.querySelector("#chart");
+  if (!visibleDates.length) {
+    runningLoadChart.innerHTML = '<p class="weekday-empty">No running activities in this period.</p>';
+    runningLoadChart.setAttribute("aria-label", "No running activities in this period");
+    document.querySelector("#chart-range").textContent = "No data in this period";
+    runningLoadLatest.hidden = true;
+    renderRunList(periodRuns);
+    return;
+  }
   runningLoadChart.innerHTML = makeChart(visibleDaily, visibleDates, visibleRolling, visibleTotals, windowDays, windowDays, showRollingTotal.checked, runningLoadChart.clientWidth);
   const chartScroll = runningLoadChart.querySelector(".running-load-plot-scroll");
   chartScroll.scrollLeft = chartScroll.scrollWidth;
@@ -517,8 +526,8 @@ function renderActivityTimeline(activities, period, periodStart, periodEnd) {
 
   const firstActivityDate = new Date(`${activities.reduce((earliest, item) => item.date < earliest ? item.date : earliest, activities[0].date)}T00:00:00`);
   const lastActivityDate = new Date(`${activities.reduce((latest, item) => item.date > latest ? item.date : latest, activities[0].date)}T00:00:00`);
-  const startDate = period === "all" ? firstActivityDate : periodStart;
-  const endDate = period === "all" ? lastActivityDate : periodEnd;
+  const startDate = firstActivityDate;
+  const endDate = lastActivityDate;
   const spanDays = Math.round(
     (Date.UTC(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())
       - Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()))
@@ -574,12 +583,12 @@ function renderActivityTimeline(activities, period, periodStart, periodEnd) {
     const value = Math.round((maxCount / tickCount) * index);
     return `<text class="frequency-axis-label" x="${margin.left - 8}" y="${y(value) + 4}" text-anchor="end">${value}</text>`;
   }).join("");
-  const labelStep = Math.max(1, Math.ceil(bucketsInRange.length / 8));
+  const labelIndices = new Set(chartLabelIndices(bucketsInRange.length, xStep));
   const bars = bucketsInRange.map((bucket, index) => {
     const x = margin.left + index * xStep + (xStep - barWidth) / 2;
     const barHeight = (bucket.count / maxCount) * plotHeight;
     const label = interval === "week"
-      ? `W${String(getISOWeekNumber(bucket.date)).padStart(2, "0")}`
+      ? `${formatDate(bucket.date, { month: "short", day: "numeric", year: "2-digit" })}`
       : formatDate(bucket.date, { month: "short", year: "2-digit" });
     const bucketEnd = new Date(bucket.date);
     if (interval === "week") bucketEnd.setDate(bucketEnd.getDate() + 6);
@@ -593,8 +602,9 @@ function renderActivityTimeline(activities, period, periodStart, periodEnd) {
     const intervalLabel = interval === "day" ? "day" : `${interval}ly`;
     const accessibleSummary = `${dateRange}: ${bucket.count} ${bucket.count === 1 ? "activity" : "activities"}, grouped by ${intervalLabel}, all activity types`;
     const bar = `<rect class="frequency-bar" x="${x}" y="${y(bucket.count)}" width="${barWidth}" height="${barHeight}" rx="2" tabindex="0" data-date-range="${escapeHtml(dateRange)}" data-count="${bucket.count}" data-interval="${intervalLabel}" aria-label="${escapeHtml(accessibleSummary)}"></rect>`;
-    const axisLabel = index % labelStep === 0 || index === bucketsInRange.length - 1
-      ? `<text class="frequency-axis-label" x="${x + barWidth / 2}" y="${height - 10}" text-anchor="middle">${label}</text>`
+    const labelAnchor = index === 0 ? "start" : index === bucketsInRange.length - 1 ? "end" : "middle";
+    const axisLabel = labelIndices.has(index)
+      ? `<text class="frequency-axis-label" x="${x + barWidth / 2}" y="${height - 10}" text-anchor="${labelAnchor}">${label}</text>`
       : "";
     return `${bar}${axisLabel}`;
   }).join("");
@@ -1262,7 +1272,8 @@ function renderCalendar(activities, runs) {
   calendarDays.innerHTML = Array.from({ length: rows }, (_, row) =>
     `<tr>${dayCells.slice(row * 7, row * 7 + 7).join("")}</tr>`,
   ).join("");
-  document.querySelector("#calendar-month").textContent = formatDate(calendarMonth, { month: "long", year: "numeric" });
+  document.querySelector("#calendar-month").textContent = formatDate(calendarMonth, { month: "long" });
+  document.querySelector("#calendar-year").textContent = String(calendarMonth.getFullYear());
   const monthlyItems = [...monthlyActivities.values()].flatMap((activity) => activity.items);
   const monthlyRunCount = monthlyItems.filter((activity) =>
     ["running", "trail"].includes(categoryForActivity(activity.type)),
@@ -1459,6 +1470,13 @@ calendarNext.addEventListener("click", () => {
   refreshDashboard();
 });
 
+for (const [id, years] of [["calendar-prev-year", -1], ["calendar-next-year", 1]]) {
+  document.querySelector(`#${id}`).addEventListener("click", () => {
+    calendarMonth = new Date(calendarMonth.getFullYear() + years, calendarMonth.getMonth(), 1);
+    refreshDashboard();
+  });
+}
+
 function setImportedState() {
   const hasRuns = importedRuns.length > 0;
   dashboard.hidden = !hasRuns;
@@ -1530,8 +1548,8 @@ function setDashboardView(view, updateUrl = false) {
 
   hideChartTooltip();
   if (dashboard.dataset.activeView !== activeView) {
-    const container = activeView === "runs" ? chart : activeView === "weekday" ? activityFrequencyChart : null;
-    const scroll = container?.querySelector(".running-load-plot-scroll, .frequency-chart-scroll");
+    const container = activeView === "runs" ? chart : activeView === "weekday" ? activityFrequencyChart : activeView === "sleep" ? sleepView : null;
+    const scroll = container?.querySelector(".running-load-plot-scroll, .frequency-chart-scroll, .sleep-plot-scroll");
     if (scroll) scroll.scrollLeft = scroll.scrollWidth;
   }
   if (activeView === "runs") refreshChartLatestButton(chart, runningLoadLatest);

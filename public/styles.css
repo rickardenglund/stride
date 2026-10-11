@@ -101,8 +101,9 @@ main { flex: 1; min-width: 0; }
 
 /* Calendar: activity-colored day tiles with matching icons. */
 .calendar-heading { margin-bottom: 24px; }
-.calendar-controls { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-#calendar-month { min-width: 140px; font-size: 14px; font-weight: 600; text-align: center; }
+.calendar-controls { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+.calendar-control-row { display: grid; grid-template-columns: 40px minmax(120px, 1fr) 40px; align-items: center; gap: 12px; width: 100%; }
+#calendar-month, #calendar-year { min-width: 0; font-size: 14px; font-weight: 600; text-align: center; }
 .calendar-nav { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 8px; background: transparent; font-size: 24px; line-height: 1; }
 .calendar-nav:hover:not(:disabled) { background: var(--surface-raised); border-color: #526477; }
 .calendar-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 6px; }
@@ -344,7 +345,8 @@ footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: s
   .stat-note { font-size: 10px; }
   .calendar-card, .chart-card, .runs-card { padding: 16px 12px; border-radius: 10px; }
   .calendar-heading { padding: 0 4px; margin-bottom: 16px; }
-  .calendar-controls { width: 100%; justify-content: space-between; }
+  .calendar-controls { width: 100%; }
+  .calendar-control-row { grid-template-columns: 42px minmax(0, 1fr) 42px; }
   .calendar-nav { width: 42px; height: 42px; }
   .calendar-table { border-spacing: 3px; }
   .calendar-table td { height: 56px; font-size: 13px; }
@@ -426,7 +428,9 @@ footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: s
 .weekday-group-row th, .weekday-group-row td { font-weight: 600; }
 .weekday-table .weekday-section-row th { padding-top: 18px; border-top: 1px solid var(--line); text-align: left; text-transform: uppercase; letter-spacing: .06em; font-size: 11px; }
 
-.sleep-chart { overflow-x: auto; margin-top: 20px; }
+.sleep-chart { display: flex; min-width: 0; margin-top: 20px; }
+.sleep-y-axis { flex: 0 0 48px; width: 48px; }
+.sleep-plot-scroll { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-color: #3c5267 transparent; scrollbar-width: thin; }
 .sleep-chart svg { display: block; height: 230px; max-width: none; }
 .sleep-chart text { fill: currentColor; font-size: 12px; }
 .sleep-average { color: #358a80; }
