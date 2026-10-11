@@ -1449,6 +1449,8 @@ function setImportedState() {
   dashboardNav.hidden = !hasRuns;
   dashboardPeriodControl.hidden = !hasRuns || dashboard.dataset.activeView === "calendar";
   gpxImportButton.hidden = !hasRuns;
+  gpxImportButton.closest(".import-menu-row").hidden = !hasRuns;
+  if (!hasRuns) document.querySelector("#import-gpx-help").hidden = true;
   unloadDataButton.hidden = !hasRuns;
   connectState.hidden = hasRuns;
   statusDot.classList.toggle("connected", hasRuns);
@@ -1658,6 +1660,25 @@ dashboardPeriod.addEventListener("change", () => {
 });
 rollingPeriod.addEventListener("change", refreshDashboard);
 showRollingTotal.addEventListener("change", refreshDashboard);
+
+const importHelpButtons = [...document.querySelectorAll('.import-help-button')];
+function closeImportHelp() {
+  for (const button of importHelpButtons) {
+    button.setAttribute('aria-expanded', 'false');
+    document.getElementById(button.getAttribute('aria-controls')).hidden = true;
+  }
+}
+for (const button of importHelpButtons) {
+  button.addEventListener('click', () => {
+    const wasExpanded = button.getAttribute('aria-expanded') === 'true';
+    closeImportHelp();
+    if (!wasExpanded) {
+      button.setAttribute('aria-expanded', 'true');
+      document.getElementById(button.getAttribute('aria-controls')).hidden = false;
+    }
+  });
+}
+importMenu.addEventListener('toggle', () => { if (!importMenu.open) closeImportHelp(); });
 
 // Native details keeps the import actions keyboard accessible without a custom menu widget.
 document.addEventListener("click", (event) => {

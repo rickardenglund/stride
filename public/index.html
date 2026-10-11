@@ -27,9 +27,21 @@
           <details class="import-menu" id="import-menu">
             <summary class="action-button">Import <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>
             <div class="import-menu-panel">
-              <button class="import-menu-item" id="import-button" type="button"><strong>Import CSV</strong><span>Add or update your activities</span></button>
-              <button class="import-menu-item" id="zip-import-button" type="button"><strong>Import Garmin ZIP</strong><span>Import activities and GPS routes</span></button>
-              <button class="import-menu-item" id="gpx-import-button" type="button" hidden><strong>Import GPX</strong><span>Add routes to your runs</span></button>
+              <div class="import-menu-row">
+                <button class="import-menu-item" id="import-button" type="button"><strong>Import CSV</strong><span>Add or update your activities</span></button>
+                <button class="import-help-button" type="button" aria-label="How to get a Garmin activities CSV" aria-expanded="false" aria-controls="import-csv-help"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M8 7.5a2 2 0 1 1 3.3 1.5c-.9.6-1.3 1-1.3 2M10 14h.01"/></svg></button>
+              </div>
+              <div class="import-help" id="import-csv-help" hidden><h3>How to get a Garmin activities CSV</h3><ol><li>Sign in to <a href="https://connect.garmin.com/" target="_blank" rel="noopener">Garmin Connect on the web</a> and set your units to kilometers.</li><li>Open <strong>Activities → All Activities</strong>. Scroll to load the activities you want to include, then choose <strong>Export CSV</strong>.</li><li>Save the <strong>.csv</strong> file and choose <strong>Import CSV</strong> here.</li></ol><a href="https://support.garmin.com/en-US/?faq=W1TvTPW8JZ6LfJSfK512Q8" target="_blank" rel="noopener">Garmin export guide ↗</a></div>
+              <div class="import-menu-row">
+                <button class="import-menu-item" id="zip-import-button" type="button"><strong>Import Garmin ZIP</strong><span>Import activities and GPS routes</span></button>
+                <button class="import-help-button" type="button" aria-label="How to get a full Garmin data export" aria-expanded="false" aria-controls="import-zip-help"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M8 7.5a2 2 0 1 1 3.3 1.5c-.9.6-1.3 1-1.3 2M10 14h.01"/></svg></button>
+              </div>
+              <div class="import-help" id="import-zip-help" hidden><h3>How to get a full Garmin data export</h3><ol><li>Sign in to <a href="https://www.garmin.com/account/datamanagement/" target="_blank" rel="noopener">Garmin Account Data Management</a>.</li><li>Request an export of your personal data. Garmin will notify you when the download is ready.</li><li>Download the <strong>.zip</strong> file and choose <strong>Import Garmin ZIP</strong> here. Keep the ZIP intact, including its nested recording archives.</li></ol><a href="https://support.garmin.com/en-US/?faq=q22kMdCbU23NUT2Wmspz16" target="_blank" rel="noopener">Garmin personal data guide ↗</a></div>
+              <div class="import-menu-row" hidden>
+                <button class="import-menu-item" id="gpx-import-button" type="button" hidden><strong>Import GPX</strong><span>Add routes to your runs</span></button>
+                <button class="import-help-button" type="button" aria-label="How to export a GPS route as GPX" aria-expanded="false" aria-controls="import-gpx-help"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M8 7.5a2 2 0 1 1 3.3 1.5c-.9.6-1.3 1-1.3 2M10 14h.01"/></svg></button>
+              </div>
+              <div class="import-help" id="import-gpx-help" hidden><h3>How to export a GPS route as GPX</h3><ol><li>Sign in to <a href="https://connect.garmin.com/" target="_blank" rel="noopener">Garmin Connect on the web</a> and open an activity with a GPS route.</li><li>Open its gear/settings menu and choose <strong>Export to GPX</strong>.</li><li>Save the <strong>.gpx</strong> file, then choose <strong>Import GPX</strong> here. You can select multiple files after importing your activities.</li></ol><a href="https://support.garmin.com/en-US/?faq=W1TvTPW8JZ6LfJSfK512Q8" target="_blank" rel="noopener">Garmin export guide ↗</a></div>
               <button class="import-menu-item unload-button" id="unload-data-button" type="button" hidden>Unload data</button>
             </div>
           </details>
