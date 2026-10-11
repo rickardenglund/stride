@@ -1,3 +1,5 @@
+import { loadImportedData, saveImportedData, clearImportedData } from "./storage.js";
+import { routeMatchesActivity, mergeRoutes } from "./routes.js";
 import { normalizeStoredRuns, parseGarminCsv } from "./csv.js";
 import { mergeActivities, runningActivities } from "./activities.js";
 import { dateKey, distanceScale, summarizeTraining } from "./training.js";
@@ -23,6 +25,12 @@ const calendarPrev = document.querySelector("#calendar-prev");
 const calendarNext = document.querySelector("#calendar-next");
 const runsList = document.querySelector("#runs-list");
 const runsSummary = document.querySelector("#runs-summary");
+const runsPagination = document.querySelector("#runs-pagination");
+const runsPageSize = document.querySelector("#runs-page-size");
+const runsPagePrevious = document.querySelector("#runs-page-previous");
+const runsPageNext = document.querySelector("#runs-page-next");
+const runsPageStatus = document.querySelector("#runs-page-status");
+let runsPage = 0;
 const weekdayFrequency = document.querySelector("#weekday-frequency");
 const activityFrequencyChart = document.querySelector("#activity-frequency-chart");
 const runningLoadLatest = document.querySelector("#running-load-latest");
@@ -47,7 +55,37 @@ const gpxInput = document.querySelector("#gpx-input");
 const unloadDataButton = document.querySelector("#unload-data-button");
 const chart = document.querySelector("#chart");
 const importButtons = [document.querySelector("#import-button"), document.querySelector("#import-cta")];
+const zipImportButton = document.querySelector("#zip-import-button");
+const importProgress = document.querySelector("#import-progress");
+const importProgressText = document.querySelector("#import-progress-text");
+const cancelImportButton = document.querySelector("#cancel-import");
+let cancelZipImport = null;
 let csvImportInProgress = false;
+
+function readGarminZip(file) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL("./garmin-worker.js", import.meta.url), { type: "module" });
+    const finish = (error, result) => {
+      worker.terminate();
+      cancelZipImport = null;
+      if (error) reject(error); else resolve(result);
+    };
+    cancelZipImport = () => finish(new DOMException("Import cancelled", "AbortError"));
+    worker.onmessage = ({ data }) => {
+      if (data.progress) importProgressText.textContent = data.progress.message;
+      else finish(data.error ? new Error(data.error) : null, data.result);
+    };
+    worker.onerror = () => finish(new Error("Could not start the Garmin importer. Reload the page and try again."));
+    worker.postMessage({ file });
+  });
+}
+cancelImportButton.addEventListener("click", () => cancelZipImport?.());
+zipImportButton.addEventListener("click", () => {
+  importMenu.open = false;
+  csvInput.value = "";
+  csvInput.accept = ".zip,application/zip";
+  csvInput.click();
+});
 let importedRuns = [];
 let importedActivities = [];
 let importedFileName = "";
@@ -592,10 +630,24 @@ function renderActivityTimeline(activities, period, periodStart, periodEnd) {
 }
 
 function renderRunList(runs) {
+  // Retain the page through chart refreshes, but reset when the filtered list changes.
+  if (runs.length !== visibleRuns.length || runs.some((run, index) => run !== visibleRuns[index])) runsPage = 0;
   visibleRuns = runs;
-  runsSummary.textContent = `${runs.length} ${runs.length === 1 ? "run" : "runs"}`;
+  const pageSize = Number(runsPageSize.value);
+  const pageCount = Math.max(1, Math.ceil(runs.length / pageSize));
+  runsPage = Math.max(0, Math.min(runsPage, pageCount - 1));
+  const start = runsPage * pageSize;
+  const end = Math.min(start + pageSize, runs.length);
+  runsSummary.textContent = runs.length
+    ? `${start + 1}–${end} of ${runs.length} ${runs.length === 1 ? "run" : "runs"}`
+    : "0 runs";
+  runsPagination.hidden = runs.length === 0;
+  runsPagePrevious.disabled = runsPage === 0;
+  runsPageNext.disabled = runsPage >= pageCount - 1;
+  runsPageStatus.textContent = `Page ${runsPage + 1} of ${pageCount}`;
   runsList.innerHTML = runs.length
-    ? runs.map((run, index) => {
+    ? runs.slice(start, end).map((run, pageIndex) => {
+      const index = start + pageIndex;
       const [year, month, day] = run.date.split("-").map(Number);
       const date = formatDate(new Date(year, month - 1, day), {
         weekday: "short",
@@ -605,7 +657,7 @@ function renderRunList(runs) {
       });
       const category = categoryForActivity(run.type || "Running");
       const hasRoute = importedRoutes.some((route) =>
-        route.date === run.date && route.category === category,
+        routeMatchesActivity(route, run, importedRuns),
       );
       const routeIndicator = hasRoute
         ? '<svg class="run-route-indicator" viewBox="0 0 20 20" role="img" aria-label="GPS route available" title="GPS route available"><path d="M3 15c3-8 5-8 8-3s4 4 6-7"></path><circle cx="3" cy="15" r="1.5"></circle><circle cx="17" cy="5" r="1.5"></circle></svg>'
@@ -619,6 +671,17 @@ function renderRunList(runs) {
     }).join("")
     : '<tr><td class="runs-empty" colspan="4">No runs in this period.</td></tr>';
 }
+
+function changeRunsPage(offset) {
+  runsPage += offset;
+  renderRunList(visibleRuns);
+}
+runsPagePrevious.addEventListener("click", () => changeRunsPage(-1));
+runsPageNext.addEventListener("click", () => changeRunsPage(1));
+runsPageSize.addEventListener("change", () => {
+  runsPage = 0;
+  renderRunList(visibleRuns);
+});
 
 let runDetailCloseTimer;
 
@@ -647,6 +710,13 @@ function showRunDetails(run, updateUrl = false) {
   runDetailDate.dataset.category = categoryForActivity(run.type || "Running");
   selectedRunDetails = run;
   const runIndex = visibleRuns.indexOf(run);
+  if (runIndex >= 0) {
+    const page = Math.floor(runIndex / Number(runsPageSize.value));
+    if (page !== runsPage) {
+      runsPage = page;
+      renderRunList(visibleRuns);
+    }
+  }
   runDetailPrevious.disabled = runIndex <= 0;
   runDetailNext.disabled = runIndex === -1 || runIndex >= visibleRuns.length - 1;
   const details = [
@@ -659,7 +729,7 @@ function showRunDetails(run, updateUrl = false) {
     `<div><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`,
   ).join("");
   const matchingRoutes = importedRoutes.filter((route) =>
-    route.date === run.date && route.category === categoryForActivity(run.type || "Running"),
+    routeMatchesActivity(route, run, importedRuns),
   );
   const route = matchingRoutes.length === 1 ? matchingRoutes[0] : null;
   runDetailTitle.textContent = route?.name || run.type || "Running";
@@ -970,16 +1040,16 @@ function parseGpx(text, fileName) {
   };
 }
 
-function persistImportedData() {
+async function persistImportedData() {
   try {
-    localStorage.setItem("stride-garmin-runs", JSON.stringify({
+    await saveImportedData({
       version: 4,
       fileName: importedFileName,
       runs: importedRuns,
       activities: importedActivities,
       routes: importedRoutes,
       distanceUnit: "m",
-    }));
+    });
     return true;
   } catch {
     showError("Your activities and routes are loaded, but this browser could not save them. They will be lost when you close this page.");
@@ -988,48 +1058,57 @@ function persistImportedData() {
 }
 
 async function importGpxFiles(files) {
-  if (!files.length) return;
-  notice.hidden = true;
-  let importedCount = 0;
-  const errors = [];
-  for (const file of files) {
-    try {
-      const route = parseGpx(await file.text(), file.name);
-      const candidates = importedRuns.filter((run) => run.date === route.date
-        && (!route.category || categoryForActivity(run.type || "Running") === route.category));
-      if (candidates.length !== 1) {
-        errors.push(candidates.length
-          ? `${file.name}: multiple runs match its date${route.category ? " and activity type" : ""}.`
-          : `${file.name}: no run matches its date${route.category ? " and activity type" : ""}.`);
-        continue;
+  if (!files.length || csvImportInProgress) return;
+  csvImportInProgress = true;
+  [...importButtons, zipImportButton, gpxImportButton, unloadDataButton].forEach(button => { button.disabled = true; });
+  try {
+    notice.hidden = true;
+    let importedCount = 0;
+    const errors = [];
+    for (const file of files) {
+      try {
+        const route = parseGpx(await file.text(), file.name);
+        const candidates = importedRuns.filter((run) => run.date === route.date
+          && (!route.category || categoryForActivity(run.type || "Running") === route.category));
+        if (candidates.length !== 1) {
+          errors.push(candidates.length
+            ? `${file.name}: multiple runs match its date${route.category ? " and activity type" : ""}.`
+            : `${file.name}: no run matches its date${route.category ? " and activity type" : ""}.`);
+          continue;
+        }
+        route.category = categoryForActivity(candidates[0].type || "Running");
+        route.activityId = candidates[0].activityId;
+        route.startTime = candidates[0].startTime;
+        const existingIndex = importedRoutes.findIndex((existing) =>
+          routeMatchesActivity(existing, candidates[0], importedRuns),
+        );
+        if (existingIndex === -1) importedRoutes.push(route);
+        else importedRoutes[existingIndex] = route;
+        importedCount += 1;
+      } catch (error) {
+        errors.push(error.message || `Could not read ${file.name}.`);
       }
-      route.category = categoryForActivity(candidates[0].type || "Running");
-      const existingIndex = importedRoutes.findIndex((existing) =>
-        existing.date === route.date && existing.category === route.category,
-      );
-      if (existingIndex === -1) importedRoutes.push(route);
-      else importedRoutes[existingIndex] = route;
-      importedCount += 1;
-    } catch (error) {
-      errors.push(error.message || `Could not read ${file.name}.`);
     }
-  }
-  if (importedCount) {
-    if (!persistImportedData()) {
-      gpxInput.value = "";
-      return;
+    if (importedCount) {
+      if (!await persistImportedData()) {
+        gpxInput.value = "";
+        return;
+      }
+      renderRunList(visibleRuns);
+      renderHeatmap();
+      if (runDetailDialog.open && selectedRunDetails) showRunDetails(selectedRunDetails);
     }
-    renderRunList(visibleRuns);
-    renderHeatmap();
-    if (runDetailDialog.open && selectedRunDetails) showRunDetails(selectedRunDetails);
+    if (errors.length) {
+      notice.textContent = `${importedCount ? `Imported ${importedCount} GPX route${importedCount === 1 ? "" : "s"}. ` : ""}${errors.join(" ")}`;
+      notice.hidden = false;
+    } else if (importedCount && !notice.textContent.startsWith("Your activities and routes are loaded")) {
+      showNotice(`Imported ${importedCount} GPX route${importedCount === 1 ? "" : "s"}.`, "success");
+    }
+    gpxInput.value = "";
+  } finally {
+    csvImportInProgress = false;
+    [...importButtons, zipImportButton, gpxImportButton, unloadDataButton].forEach(button => { button.disabled = false; });
   }
-  if (errors.length) {
-    notice.textContent = `${importedCount ? `Imported ${importedCount} GPX route${importedCount === 1 ? "" : "s"}. ` : ""}${errors.join(" ")}`;
-    notice.hidden = false;
-  } else if (importedCount && !notice.textContent.startsWith("Your activities and routes are loaded")) {
-    showNotice(`Imported ${importedCount} GPX route${importedCount === 1 ? "" : "s"}.`, "success");
-  }
-  gpxInput.value = "";
 }
 
 runsList.addEventListener("click", (event) => {
@@ -1253,17 +1332,16 @@ function renderHeatmap() {
     && routesSnapshot.every((route, index) => route === heatmapRoutesSnapshot[index])) return;
   heatmapRunsSnapshot = importedRuns;
   heatmapRoutesSnapshot = routesSnapshot;
-  const runKeys = new Set(importedRuns.map(run => `${run.date}:${categoryForActivity(run.type || "Running")}`));
   const routes = importedRoutes.filter(route => ["running", "trail"].includes(route.category)
-    && runKeys.has(`${route.date}:${route.category}`));
+    && importedRuns.some(run => routeMatchesActivity(route, run, importedRuns)));
   const model = buildRunHeatmap(routes);
   mountBackgroundMap(document.querySelector("#run-heatmap"),
     model.routeCount ? renderRunHeatmap(model) : "", model.bounds);
   document.querySelector("#run-heatmap-empty").hidden = model.routeCount > 0;
   document.querySelector("#run-heatmap-legend").hidden = model.maxCount <= 1;
   document.querySelector("#run-heatmap-summary").textContent = model.routeCount
-    ? `${model.routeCount} ${model.routeCount === 1 ? "run" : "runs"} with GPX · Most visited area: ${model.maxCount} ${model.maxCount === 1 ? "run" : "runs"}`
-    : "No GPX routes imported";
+    ? `${model.routeCount} ${model.routeCount === 1 ? "run" : "runs"} with GPS routes · Most visited area: ${model.maxCount} ${model.maxCount === 1 ? "run" : "runs"}`
+    : "No GPS routes imported";
 }
 
 function refreshDashboard() {
@@ -1301,10 +1379,11 @@ function setImportedState() {
   }
 }
 
-function unloadImportedData() {
-  if (!window.confirm("Unload all imported activities and GPX routes from this browser? The original files on your device will not be deleted.")) return;
+async function unloadImportedData() {
+  if (csvImportInProgress) return;
+  if (!window.confirm("Unload all imported activities and routes from this browser? The original files on your device will not be deleted.")) return;
   try {
-    localStorage.removeItem("stride-garmin-runs");
+    await clearImportedData();
   } catch {
     showError("Could not remove the saved activities from this browser.");
     return;
@@ -1316,6 +1395,7 @@ function unloadImportedData() {
   importedFileName = "";
   importedRoutes = [];
   visibleRuns = [];
+  runsPage = 0;
   selectedRunDetails = null;
   selectedRouteCoordinates = [];
   selectedHeartRatePoints = [];
@@ -1398,46 +1478,57 @@ async function connectDevReload() {
 
 async function importFile(file) {
   if (!file || csvImportInProgress) return;
-  if (!/\.csv$/i.test(file.name)) {
-    showError("Choose a Garmin activities CSV file (.csv).");
+  if (!/\.(csv|zip)$/i.test(file.name)) {
+    showError("Choose a Garmin activities CSV or data export ZIP file.");
     return;
   }
+  const isZip = /\.zip$/i.test(file.name);
   csvImportInProgress = true;
+  zipImportButton.disabled = true;
+  gpxImportButton.disabled = true;
+  unloadDataButton.disabled = true;
+  importProgress.hidden = !isZip;
+  cancelImportButton.disabled = false;
+  importProgressText.textContent = "Reading Garmin ZIP…";
   importButtons.forEach((button) => { button.disabled = true; });
   csvDropZone.setAttribute("aria-busy", "true");
   notice.hidden = true;
   try {
-    const { activities } = parseGarminCsv(await file.text(), "km", { requireRuns: importedRuns.length === 0 });
-    const mergedActivities = mergeActivities(importedActivities, activities);
+    const result = isZip ? await readGarminZip(file)
+      : parseGarminCsv(await file.text(), "km", { requireRuns: importedRuns.length === 0 });
+    if (isZip) {
+      importProgressText.textContent = "Saving activities and routes…";
+      cancelImportButton.disabled = true;
+    }
+    const { activities } = result;
+    const mergedActivities = mergeActivities(importedActivities, activities, { preserveMissing: true });
+    const added = mergedActivities.length - importedActivities.length;
     const mergedRuns = runningActivities(mergedActivities);
+    if (!mergedRuns.length) throw new Error("No running activities with valid dates and distances were found in this export.");
     if (runDetailDialog.open) closeRunDetails();
     clearRunFromUrl();
     selectedRunDetails = null;
     importedRuns = mergedRuns;
     importedActivities = mergedActivities;
     importedFileName = file.name;
-    importedRoutes = importedRoutes.filter((route) => mergedRuns.some((run) =>
-      run.date === route.date && categoryForActivity(run.type || "Running") === route.category,
-    ));
+    importedRoutes = mergeRoutes(importedRoutes, result.routes || []);
     calendarMonth = null;
-    try {
-      localStorage.setItem("stride-garmin-runs", JSON.stringify({
-        version: 4,
-        fileName: importedFileName,
-        runs: mergedRuns,
-        activities: mergedActivities,
-        routes: importedRoutes,
-        distanceUnit: "m",
-      }));
-    } catch {
-      showError("Your runs are loaded, but this browser could not save them. They will be lost when you close this page.");
-    }
+    const savedSuccessfully = await persistImportedData();
     setImportedState();
     refreshDashboard();
+    if (isZip && savedSuccessfully) {
+      showNotice(`Imported Garmin history: ${added} added, ${activities.length - added} matched existing activities. ${result.routes.length} GPS routes imported. ${result.routeStats.failed} recordings could not be read; ${result.routeStats.unmatched} route recordings had no unique activity match. ${result.skipped} invalid records and ${result.parents} multisport parent records skipped.`, "success");
+    }
   } catch (error) {
-    showError(error.message || "Could not read the selected CSV file.");
+    if (error.name === "AbortError") showNotice("Import cancelled. Your saved activities are unchanged.", "success");
+    else showError(error.message || "Could not read the selected activity file.");
   } finally {
     csvImportInProgress = false;
+    importProgress.hidden = true;
+    zipImportButton.disabled = false;
+    gpxImportButton.disabled = false;
+    unloadDataButton.disabled = false;
+    csvInput.value = "";
     importButtons.forEach((button) => { button.disabled = false; });
     csvDropZone.removeAttribute("aria-busy");
   }
@@ -1447,6 +1538,7 @@ for (const button of importButtons) {
   button.addEventListener("click", () => {
     importMenu.open = false;
     csvInput.value = "";
+    csvInput.accept = button.id === "import-cta" ? ".csv,.zip,text/csv,application/zip" : ".csv,text/csv";
     csvInput.click();
   });
 }
@@ -1478,7 +1570,10 @@ unloadDataButton.addEventListener("click", () => {
   importMenu.open = false;
   unloadImportedData();
 });
-dashboardPeriod.addEventListener("change", refreshDashboard);
+dashboardPeriod.addEventListener("change", () => {
+  runsPage = 0;
+  refreshDashboard();
+});
 rollingPeriod.addEventListener("change", refreshDashboard);
 showRollingTotal.addEventListener("change", refreshDashboard);
 
@@ -1515,8 +1610,8 @@ csvDropZone.addEventListener("drop", (event) => {
   dragDepth = 0;
   csvDropZone.classList.remove("is-dragging");
   const files = [...event.dataTransfer.files];
-  if (files.length !== 1 || !/\.csv$/i.test(files[0].name)) {
-    showError("Choose one Garmin activities CSV file. You can import GPX routes after loading your CSV.");
+  if (files.length !== 1 || !/\.(csv|zip)$/i.test(files[0].name)) {
+    showError("Choose one Garmin activities CSV or data export ZIP file.");
     return;
   }
   importFile(files[0]);
@@ -1537,8 +1632,10 @@ window.addEventListener("resize", () => {
   resizeTimer = setTimeout(refreshDashboard, 150);
 });
 
+csvImportInProgress = true;
+[...importButtons, zipImportButton, gpxImportButton, unloadDataButton].forEach(button => { button.disabled = true; });
 try {
-  const saved = JSON.parse(localStorage.getItem("stride-garmin-runs") || "null");
+  const saved = await loadImportedData();
   if (saved && Array.isArray(saved.runs) && saved.runs.every((run) => typeof run.date === "string" && Number.isFinite(run.distance))) {
     importedRuns = normalizeStoredRuns(saved.runs, saved.distanceUnit);
     for (const run of importedRuns) {
@@ -1565,14 +1662,14 @@ try {
     const hasSavedActivityTypes = Array.isArray(saved.activities);
     if (saved.version !== 4 || saved.distanceUnit !== "m" || !hasSavedActivityTypes) {
       try {
-        localStorage.setItem("stride-garmin-runs", JSON.stringify({
+        await saveImportedData({
           version: saved.version === 4 ? 4 : saved.version === 3 ? 3 : saved.version === 2 ? 2 : 1,
           fileName: importedFileName,
           runs: importedRuns,
           activities: importedActivities,
           routes: importedRoutes,
           distanceUnit: "m",
-        }));
+        });
       } catch {
         showError("Your saved runs were converted for this session, but the updated distances could not be saved.");
       }
@@ -1584,7 +1681,10 @@ try {
     }
   }
 } catch {
-  showError("Saved activities could not be read. Please import the Garmin CSV again.");
+  showError("Saved activities could not be read. Please import your Garmin export again.");
+} finally {
+  csvImportInProgress = false;
+  [...importButtons, zipImportButton, gpxImportButton, unloadDataButton].forEach(button => { button.disabled = false; });
 }
 setImportedState();
 syncRunDetailsFromUrl();

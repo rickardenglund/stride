@@ -1,5 +1,17 @@
+export function normalizeActivityType(type) {
+  const key = type.trim().toLowerCase().replace(/[_\s]+/g, " ");
+  const aliases = {
+    "strength training": "strength", "lap swimming": "pool swim",
+    "road biking": "road cycling", "gravel cycling": "gravel/unpaved cycling",
+    "multi sport": "multisport", "kayaking v2": "kayaking", "indoor cardio": "cardio",
+    "cross country skiing ws": "cross country classic skiing",
+    "resort skiing snowboarding ws": "resort skiing/snowboarding",
+  };
+  return aliases[key] || key;
+}
+
 function keysForActivity(activity) {
-  const type = activity.type.trim().toLowerCase();
+  const type = normalizeActivityType(activity.type);
   const day = JSON.stringify([activity.date, type]);
   return {
     id: activity.activityId ? String(activity.activityId) : null,
@@ -16,7 +28,7 @@ function compatibleIdentity(previous, incoming) {
 
 // Stable IDs and start times identify activities independently of editable metrics.
 // Older records without those fields are matched only when the match is unique.
-export function mergeActivities(previous, incoming) {
+export function mergeActivities(previous, incoming, { preserveMissing = false } = {}) {
   const merged = [];
   const indexes = { id: new Map(), start: new Map(), details: new Map(), day: new Map() };
   const previousIndexes = new Set();
@@ -61,7 +73,10 @@ export function mergeActivities(previous, incoming) {
       const old = merged[index];
       indexActivity(old, index, true);
       merged[index] = {
+        ...old,
         ...activity,
+        ...(preserveMissing ? Object.fromEntries(Object.entries(old).filter(([key, value]) =>
+          value != null && activity[key] == null)) : {}),
         ...(old.activityId && !activity.activityId ? { activityId: old.activityId } : {}),
         ...(old.startTime && !activity.startTime ? { startTime: old.startTime } : {}),
       };

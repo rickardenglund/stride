@@ -28,6 +28,7 @@
             <summary class="action-button">Import <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>
             <div class="import-menu-panel">
               <button class="import-menu-item" id="import-button" type="button"><strong>Import CSV</strong><span>Add or update your activities</span></button>
+              <button class="import-menu-item" id="zip-import-button" type="button"><strong>Import Garmin ZIP</strong><span>Import activities and GPS routes</span></button>
               <button class="import-menu-item" id="gpx-import-button" type="button" hidden><strong>Import GPX</strong><span>Add routes to your runs</span></button>
               <button class="import-menu-item unload-button" id="unload-data-button" type="button" hidden>Unload data</button>
             </div>
@@ -37,6 +38,7 @@
 
       <main>
         <div class="notice" id="notice" role="alert" hidden></div>
+        <div class="notice" id="import-progress" role="status" aria-live="polite" hidden><span id="import-progress-text"></span> <button id="cancel-import" type="button">Cancel import</button></div>
         <section class="dashboard" id="dashboard" hidden>
           <div class="page-heading">
             <div><p class="eyebrow">Your training</p><h1 id="view-title">Training calendar</h1><p class="page-description" id="summary-period"></p></div>
@@ -120,7 +122,7 @@
             </summary>
             <div id="run-heatmap" class="run-heatmap"></div>
             <p id="run-heatmap-empty" class="heatmap-empty">Import GPX files from the Import menu to see where you run.</p>
-            <div class="chart-footer"><span>All time · North ↑</span><span id="run-heatmap-summary">No GPX routes imported</span></div>
+            <div class="chart-footer"><span>All time · North ↑</span><span id="run-heatmap-summary">No GPS routes imported</span></div>
             <div id="run-heatmap-legend" class="heatmap-legend" hidden><span>Fewer runs</span><i aria-hidden="true"></i><span>More runs</span></div>
           </details>
           <section class="runs-card" aria-labelledby="runs-title">
@@ -139,6 +141,16 @@
                 <tbody id="runs-list"></tbody>
               </table>
             </div>
+            <nav class="runs-pagination" id="runs-pagination" aria-label="Runs pagination" hidden>
+              <label class="runs-page-size">Runs per page
+                <select id="runs-page-size"><option value="25" selected>25</option><option value="50">50</option><option value="100">100</option></select>
+              </label>
+              <div class="runs-page-controls">
+                <button class="action-button" id="runs-page-previous" type="button" aria-controls="runs-list">Previous</button>
+                <span id="runs-page-status" role="status" aria-live="polite" aria-atomic="true"></span>
+                <button class="action-button" id="runs-page-next" type="button" aria-controls="runs-list">Next</button>
+              </div>
+            </nav>
             <p class="pace-note">Pace is shown in min/km. Garmin’s average pace is used when available; otherwise it is calculated from duration.</p>
           </section>
           </div>
@@ -217,12 +229,12 @@
             <p class="eyebrow">Your personal training journal</p>
             <h1 id="welcome-title">A clearer view of your training.</h1>
             <p class="welcome-description">See your running load, explore your routes, and find the patterns in your activity.</p>
-            <div class="drop-zone" id="csv-drop-zone" role="region" aria-label="Drop a Garmin CSV file">
+            <div class="drop-zone" id="csv-drop-zone" role="region" aria-label="Drop a Garmin CSV or ZIP file">
               <svg class="upload-icon" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 21V5m-6 6 6-6 6 6M6 21v6h20v-6"/></svg>
-              <h2>Drop your Garmin CSV here</h2>
+              <h2>Drop your Garmin CSV or ZIP here</h2>
               <p>or choose a file from your device</p>
-              <button class="action-button connect-cta" id="import-cta" type="button">Choose CSV file</button>
-              <span class="file-requirement">Garmin activities CSV · Metric units (km) only</span>
+              <button class="action-button connect-cta" id="import-cta" type="button">Choose CSV or ZIP file</button>
+              <span class="file-requirement">Garmin data export ZIP or activities CSV · CSV uses kilometers</span>
             </div>
             <details class="export-help">
               <summary>Choose a file from Dropbox on iPhone</summary>
@@ -237,12 +249,13 @@
               </ol>
               <p>CSV files without unit labels are treated as kilometers.</p>
             </details>
+            <details class="export-help"><summary>Import a full Garmin data export</summary><p>Choose the original ZIP from your Garmin account data export. Stride imports activity history and GPS routes locally, including the recordings inside nested ZIPs.</p></details>
             <p class="welcome-gpx-note">You can add GPX routes, heart rate, and elevation after importing your activities.</p>
             <p class="privacy-note"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="9" width="12" height="8" rx="2"/><path d="M7 9V6a3 3 0 0 1 6 0v3"/></svg> Your activity data stays in this browser.</p>
           </div>
         </section>
 
-        <input id="csv-input" type="file" accept=".csv,text/csv" hidden>
+        <input id="csv-input" type="file" accept=".csv,.zip,text/csv,application/zip" hidden>
         <input id="gpx-input" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" multiple hidden>
       </main>
       <footer><span>Stride · Personal training journal</span><span class="sync-label"><span class="status-dot"></span><span id="connection-label">No activities imported</span></span></footer>
