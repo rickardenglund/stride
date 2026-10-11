@@ -23,6 +23,20 @@ test('chart inspection finds nearby samples, supports taps without interrupting 
   listeners.pointermove(event);
   assert.equal(shown, points[2]);
   assert.ok(points[2].classList.has('chart-point-selected'));
+  // Leaving one SVG for its heading/gap still stays inside the shared chart container.
+  listeners.pointerout({ ...event, relatedTarget: { closest: () => null } });
+  assert.equal(shown, null);
+  assert.equal(points[2].classList.has('chart-point-selected'), false);
+  listeners.pointermove(event);
+  listeners.pointerout({ ...event, relatedTarget: target });
+  assert.equal(shown, points[2]); // Movement between shapes in the same chart stays visible.
+  listeners.pointermove({ ...event, target: { closest: () => null } });
+  assert.equal(shown, null);
+  listeners.pointermove(event);
+  const axis = { querySelector: () => null };
+  listeners.pointermove({ ...event, target: { closest: () => axis } });
+  assert.equal(shown, null);
+  listeners.pointermove(event);
   listeners.pointerleave(event);
   assert.equal(shown, null);
   event.pointerType = 'touch';

@@ -21,11 +21,12 @@ test('weekday totals combine matching sports and retain individual types without
   assert.deepEqual(new Map(result.types).get('trail running'), [1,0,0,0,0,0,0]);
 });
 
-test('empty inputs and ungrouped sports retain consistent summary rows', () => {
+test('empty inputs and ungrouped sports omit empty groups', () => {
   assert.deepEqual(groupActivitiesByWeekday([]).all, Array(7).fill(0));
   const result = groupActivitiesByWeekday([{ date:'2024-01-06', type:'Strength Training' }]);
   assert.equal(result.all[5],1);
-  assert.ok(result.groups.every(group => group.counts.every(count => count === 0)));
+  assert.deepEqual(result.groups, []);
+  assert.deepEqual(groupActivitiesByWeekday([]).groups, []);
   assert.deepEqual(result.types, [['strength', [0,0,0,0,0,1,0]]]);
 });
 
@@ -34,7 +35,7 @@ test('groups and individual types sort separately by descending totals with alph
     .map(type => ({ date: '2024-01-01', type }));
   const result = groupActivitiesByWeekday(activities);
   assert.deepEqual(result.groups.map(group => group.label), [
-    'Cycling / Gravel', 'Running / Trail', 'Walking / Hiking', 'Bouldering / Indoor Climbing',
+    'Cycling / Gravel', 'Running / Trail', 'Walking / Hiking',
   ]);
   assert.deepEqual(result.types.map(([type]) => type), ['yoga', 'cycling', 'gravel/unpaved cycling', 'hiking', 'running']);
   assert.equal(result.all[0], 10);

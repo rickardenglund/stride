@@ -196,8 +196,13 @@
                   <h2 id="weekday-title">Activity by weekday</h2>
                   <p id="weekday-description">Activity counts grouped by weekday</p>
                 </div>
+                <div class="weekday-view-toggle" role="group" aria-label="Weekday display">
+                  <button type="button" data-weekday-view="table" aria-pressed="true" aria-controls="weekday-table-view">Table</button>
+                  <button type="button" data-weekday-view="bars" aria-pressed="false" aria-controls="weekday-bar-view">Bar chart</button>
+                </div>
               </div>
-              <div class="runs-table-wrap">
+              <div id="weekday-bar-view" aria-describedby="weekday-description" hidden></div>
+              <div class="runs-table-wrap" id="weekday-table-view">
                 <table class="weekday-table" aria-describedby="weekday-description">
                   <thead>
                     <tr>

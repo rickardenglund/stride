@@ -7,7 +7,7 @@ export function bindChartInspection(container, selector, show, hide) {
   };
   const inspect = event => {
     const svg = event.target.closest("svg");
-    if (!svg || !svg.querySelector(selector)) return;
+    if (!svg || !svg.querySelector(selector)) { clear(); return; }
     let point = event.target.closest(selector);
     if (!point) {
       let distance = Infinity;
@@ -28,6 +28,11 @@ export function bindChartInspection(container, selector, show, hide) {
   container.addEventListener("pointermove", event => { if (event.pointerType !== "touch") inspect(event); });
   container.addEventListener("pointerup", event => { if (event.pointerType === "touch") inspect(event); });
   container.addEventListener("pointerleave", event => { if (event.pointerType !== "touch") clear(); });
+  container.addEventListener("pointerout", event => {
+    if (event.pointerType === "touch") return;
+    const svg = event.target.closest?.("svg");
+    if (svg && event.relatedTarget?.closest?.("svg") !== svg) clear();
+  });
   container.addEventListener("pointercancel", clear);
   container.addEventListener("focusin", event => {
     const point = event.target.closest(selector);

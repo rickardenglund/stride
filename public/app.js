@@ -1,6 +1,6 @@
 import { bindChartInspection } from "./chart-inspection.js";
 import { mergeSleep, renderSleep } from "./sleep.js";
-import { groupActivitiesByWeekday } from "./weekday.js";
+import { groupActivitiesByWeekday, renderWeekdayBars } from "./weekday.js";
 import { normalizeHeatmapSelection, toggleHeatmapType, selectedHeatmapRoutes, HEATMAP_TYPE_GROUPS, heatmapGroupTypes, heatmapOptionState, defaultHeatmapSelection } from "./heatmap-filter.js";
 import { loadImportedData, saveImportedData, clearImportedData } from "./storage.js";
 import { routeMatchesActivity, mergeRoutes } from "./routes.js";
@@ -36,6 +36,18 @@ const runsPageNext = document.querySelector("#runs-page-next");
 const runsPageStatus = document.querySelector("#runs-page-status");
 let runsPage = 0;
 const weekdayFrequency = document.querySelector("#weekday-frequency");
+const weekdayBarView = document.querySelector("#weekday-bar-view");
+document.querySelector(".weekday-view-toggle").addEventListener("click", event => {
+  const button = event.target.closest("[data-weekday-view]");
+  if (!button) return;
+  const bars = button.dataset.weekdayView === "bars";
+  document.querySelector("#weekday-table-view").hidden = bars;
+  weekdayBarView.hidden = !bars;
+  for (const option of document.querySelectorAll("[data-weekday-view]")) {
+    option.setAttribute("aria-pressed", String(option === button));
+  }
+  hideChartTooltip();
+});
 const activityFrequencyChart = document.querySelector("#activity-frequency-chart");
 const runningLoadLatest = document.querySelector("#running-load-latest");
 const activityTimelineLatest = document.querySelector("#activity-timeline-latest");
@@ -378,8 +390,15 @@ function refreshChartLatestButton(scrollContainer, button) {
 
 bindChartInspection(chart, ".avg-point, .sum-point, .daily-bar", showChartTooltip, hideChartTooltip);
 bindChartInspection(activityFrequencyChart, ".frequency-bar", showFrequencyTooltip, hideChartTooltip);
+bindChartInspection(weekdayBarView, ".weekday-bar", (bar, x, y) => {
+  chartTooltip.children[0].textContent = `${bar.dataset.label} · ${bar.dataset.weekday}`;
+  chartTooltip.children[1].textContent = bar.dataset.count;
+  chartTooltip.children[2].textContent = bar.dataset.count === "1" ? "Activity" : "Activities";
+  chartTooltip.children[3].textContent = "Selected time period";
+  positionChartTooltip(x, y);
+}, hideChartTooltip);
 document.addEventListener("pointerdown", event => {
-  if (![chart, activityFrequencyChart, runHeartRateChart, runElevationChart, runRouteChart].some(container => container.contains(event.target))) hideChartTooltip();
+  if (![chart, activityFrequencyChart, weekdayBarView, runHeartRateChart, runElevationChart, runRouteChart].some(container => container.contains(event.target))) hideChartTooltip();
 });
 document.addEventListener("scroll", hideChartTooltip, { capture: true, passive: true });
 document.addEventListener("keydown", event => { if (event.key === "Escape") hideChartTooltip(); });
@@ -457,6 +476,7 @@ function renderWeekdayFrequency(activities, period) {
   renderActivityTimeline(periodActivities, period, start, today);
 
   const grouped = groupActivitiesByWeekday(periodActivities);
+  weekdayBarView.innerHTML = renderWeekdayBars(grouped);
 
   document.querySelector("#weekday-description").textContent = period === "all"
     ? `Activity counts across all ${periodActivities.length} imported activities, grouped by weekday`
