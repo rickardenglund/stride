@@ -117,13 +117,23 @@
           </article>
           <details class="chart-card heatmap-card" aria-labelledby="run-heatmap-title">
             <summary class="chart-heading heatmap-heading">
-              <div><h2 id="run-heatmap-title">Running heatmap</h2><p>All imported running routes · Warmer colors show more runs</p></div>
+              <div><h2 id="run-heatmap-title">Activity heatmap</h2><p>Updates automatically as you zoom or pan · Warmer colors show more activities</p></div>
               <svg class="heatmap-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5"/></svg>
             </summary>
+            <div class="heatmap-controls">
+              <details class="heatmap-type-menu" id="heatmap-type-menu">
+                <summary class="action-button">Activity types: <span id="heatmap-type-label">Running / Trail (0)</span></summary>
+                <fieldset class="heatmap-type-options" id="heatmap-type-options" aria-describedby="heatmap-type-help">
+                  <legend class="sr-only">Activity types</legend>
+                  <div id="heatmap-type-choices"></div>
+                  <p id="heatmap-type-help">Counts include imported activities with GPS routes.</p>
+                </fieldset>
+              </details>
+            </div>
             <div id="run-heatmap" class="run-heatmap"></div>
-            <p id="run-heatmap-empty" class="heatmap-empty">Import GPX files from the Import menu to see where you run.</p>
-            <div class="chart-footer"><span>All time · North ↑</span><span id="run-heatmap-summary">No GPS routes imported</span></div>
-            <div id="run-heatmap-legend" class="heatmap-legend" hidden><span>Fewer runs</span><i aria-hidden="true"></i><span>More runs</span></div>
+            <p id="run-heatmap-empty" class="heatmap-empty">Import a Garmin ZIP or GPX routes from the Import menu to see your activity routes.</p>
+            <div class="chart-footer"><span>All time · North ↑</span><span id="run-heatmap-summary" role="status" aria-live="polite">No GPS routes imported</span></div>
+            <div id="run-heatmap-legend" class="heatmap-legend" hidden><span>Fewer activities</span><i aria-hidden="true"></i><span>More activities</span></div>
           </details>
           <section class="runs-card" aria-labelledby="runs-title">
             <div class="runs-heading">

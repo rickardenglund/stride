@@ -34,3 +34,63 @@ test('maps initialize only when visible and clean up on replacement', () => {
     assert.equal(removed,1);assert.equal(disconnected,1);
   } finally { globalThis.L=oldL;globalThis.ResizeObserver=oldObserver; }
 });
+
+test('heatmap overlay updates preserve the map instance and its viewport', async () => {
+  const { getMapViewport, updateMapOverlay } = await import('../public/maps.js');
+  const previous={L:globalThis.L,ResizeObserver:globalThis.ResizeObserver,document:globalThis.document};
+  let resize,initialized=0,fits=0,removed=0;
+  const svg={};
+  const bounds=[[59,18],[60,19]];
+  const element={innerHTML:'',clientWidth:600,clientHeight:300,querySelector:()=>svg};
+  const map={attributionControl:{setPrefix(){}},fitBounds(){fits++},invalidateSize(){},
+    getBounds:()=>({getSouth:()=>59,getWest:()=>18,getNorth:()=>60,getEast:()=>19}),
+    getSize:()=>({x:600,y:300}),remove(){assert.fail('Map must be retained');}};
+  globalThis.ResizeObserver=class {constructor(callback){resize=callback}observe(){}disconnect(){}};
+  globalThis.document={createElement:()=>({content:{querySelector:()=>svg}})};
+  globalThis.L={map(){initialized++;return map},tileLayer:()=>({addTo(){}}),
+    svgOverlay:(overlay,overlayBounds)=>({addTo(target){assert.equal(target,map);assert.deepEqual(overlayBounds,bounds);return this},remove(){removed++}})};
+  try {
+    assert.equal(getMapViewport(element),null);
+    mountBackgroundMap(element,'<svg/>',bounds);
+    resize();
+    assert.deepEqual(getMapViewport(element),{bounds,width:600,height:300});
+    assert.equal(updateMapOverlay(element,'<svg/>',bounds),true);
+    assert.equal(initialized,1);
+    assert.equal(fits,1);
+    assert.equal(removed,1);
+    assert.equal(updateMapOverlay({},'<svg/>',bounds),false);
+  } finally { Object.assign(globalThis,previous); }
+});
+
+test('automatic recalculation coalesces map events and cancels pending work on replacement', () => {
+  const previous = { L: globalThis.L, ResizeObserver: globalThis.ResizeObserver,
+    setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout };
+  const pending = new Map(), events = {};
+  let sequence = 0, resize, recalculations = 0;
+  const element = { innerHTML: '', clientWidth: 600, clientHeight: 300, querySelector: () => ({}) };
+  const map = { attributionControl: { setPrefix() {} }, fitBounds() {}, invalidateSize() {}, remove() {},
+    on(names, callback) { for (const name of names.split(' ')) events[name] = callback; } };
+  globalThis.setTimeout = callback => { pending.set(++sequence, callback); return sequence; };
+  globalThis.clearTimeout = id => pending.delete(id);
+  globalThis.ResizeObserver = class { constructor(callback) { resize = callback; } observe() {} disconnect() {} };
+  globalThis.L = { map: () => map, tileLayer: () => ({ addTo() {} }), svgOverlay: () => ({ addTo() {} }) };
+  const flush = () => { const callbacks = [...pending.values()]; pending.clear(); callbacks.forEach(callback => callback()); };
+  try {
+    mountBackgroundMap(element, '<svg/>', [[59, 18], [60, 19]], { onViewportChange: () => recalculations++ });
+    resize(); flush();
+    assert.equal(recalculations, 1); // Initial view is recalculated at actual map dimensions.
+    events.zoomend(); events.moveend(); events.zoomend();
+    assert.equal(pending.size, 1);
+    flush(); assert.equal(recalculations, 2);
+    events.moveend(); events.movestart();
+    flush(); assert.equal(recalculations, 2); // Do not calculate while dragging resumes.
+    resize(); flush(); assert.equal(recalculations, 3);
+    events.moveend(); element.clientWidth = 0;
+    flush(); assert.equal(recalculations, 3); // Hidden maps do not calculate.
+    element.clientWidth = 600;
+    events.moveend();
+    mountBackgroundMap(element, '', null);
+    assert.equal(pending.size, 0);
+    flush(); assert.equal(recalculations, 3);
+  } finally { Object.assign(globalThis, previous); }
+});

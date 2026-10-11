@@ -30,8 +30,9 @@ export function projectMapRoutes(routes, width, height, padding = 20) {
 }
 
 const maps = new WeakMap();
-export function mountBackgroundMap(element, markup, bounds) {
+export function mountBackgroundMap(element, markup, bounds, { onViewportChange } = {}) {
   const previous = maps.get(element);
+  clearTimeout(previous?.viewportTimer);
   previous?.observer?.disconnect();
   previous?.visibility?.disconnect();
   previous?.map?.remove();
@@ -40,6 +41,14 @@ export function mountBackgroundMap(element, markup, bounds) {
   if (!markup || !bounds || !globalThis.L || !globalThis.ResizeObserver) return;
   const state = {};
   maps.set(element, state);
+  const cancelViewportUpdate = () => clearTimeout(state.viewportTimer);
+  const scheduleViewportUpdate = () => {
+    if (!onViewportChange) return;
+    cancelViewportUpdate();
+    state.viewportTimer = setTimeout(() => {
+      if (maps.get(element) === state && element.clientWidth && element.clientHeight) onViewportChange();
+    }, 150);
+  };
   const update = () => {
     if (!element.clientWidth || !element.clientHeight) return;
     if (!state.map) {
@@ -52,13 +61,40 @@ export function mountBackgroundMap(element, markup, bounds) {
         maxZoom: 19, keepBuffer: 0, referrerPolicy: 'strict-origin-when-cross-origin',
         attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
       }).addTo(state.map);
-      L.svgOverlay(svg, bounds, { interactive: true, className: 'training-map-overlay' }).addTo(state.map);
+      state.overlay = L.svgOverlay(svg, bounds, { interactive: true, className: 'training-map-overlay' }).addTo(state.map);
       state.map.fitBounds(bounds, { animate: false, maxZoom: 17 });
+      if (onViewportChange) {
+        state.map.on('movestart zoomstart', cancelViewportUpdate);
+        state.map.on('moveend zoomend', scheduleViewportUpdate);
+      }
     } else {
       state.map.invalidateSize({ animate: false, pan: false });
     }
+    scheduleViewportUpdate();
   };
   state.observer = new ResizeObserver(update);
   state.observer.observe(element);
   // ResizeObserver also fires on hidden-to-visible transitions.
+}
+
+export function getMapViewport(element) {
+  const map = maps.get(element)?.map;
+  if (!map || !element.clientWidth || !element.clientHeight) return null;
+  const bounds = map.getBounds();
+  const size = map.getSize();
+  return { bounds: [[bounds.getSouth(), bounds.getWest()], [bounds.getNorth(), bounds.getEast()]],
+    width: size.x, height: size.y };
+}
+
+// Replace only the heat layer so the current center, zoom, and tiles are retained.
+export function updateMapOverlay(element, markup, bounds) {
+  const state = maps.get(element);
+  if (!state?.map) return false;
+  const template = document.createElement('template');
+  template.innerHTML = markup;
+  const overlay = L.svgOverlay(template.content.querySelector('svg'), bounds,
+    { interactive: true, className: 'training-map-overlay' }).addTo(state.map);
+  state.overlay?.remove();
+  state.overlay = overlay;
+  return true;
 }

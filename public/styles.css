@@ -395,3 +395,19 @@ footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: s
   .avg-path { stroke-width: 3.5; }
   :focus-visible { outline-color: white; }
 }
+
+.heatmap-controls { display: flex; justify-content: flex-end; margin-top: 16px; }
+
+.heatmap-type-menu { position: relative; }
+.heatmap-type-menu > summary { list-style: none; }
+.heatmap-type-menu > summary::-webkit-details-marker { display: none; }
+.heatmap-type-options { position: absolute; right: 0; top: calc(100% + 6px); width: min(320px, calc(100vw - 64px)); max-height: 350px; overflow-y: auto; margin: 0; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); box-shadow: 0 12px 28px #0006; z-index: 1100; }
+.heatmap-type-option { display: flex; gap: 10px; align-items: center; padding: 10px 8px; cursor: pointer; font-size: 13px; }
+.heatmap-type-option:hover { background: var(--surface); }
+.heatmap-type-option input { accent-color: var(--accent); width: 16px; height: 16px; flex-shrink: 0; }
+#heatmap-type-help { margin: 8px; color: var(--muted); font-size: 12px; }
+.heatmap-type-options .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+.heatmap-type-shortcuts { font-weight: 600; }
+.heatmap-type-individual { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
+#heatmap-individual-label { margin: 4px 8px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }

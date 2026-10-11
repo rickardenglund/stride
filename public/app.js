@@ -1,10 +1,11 @@
+import { normalizeHeatmapSelection, toggleHeatmapType, selectedHeatmapRoutes, HEATMAP_TYPE_GROUPS, heatmapGroupTypes, heatmapOptionState, defaultHeatmapSelection } from "./heatmap-filter.js";
 import { loadImportedData, saveImportedData, clearImportedData } from "./storage.js";
 import { routeMatchesActivity, mergeRoutes } from "./routes.js";
 import { normalizeStoredRuns, parseGarminCsv } from "./csv.js";
 import { mergeActivities, runningActivities } from "./activities.js";
 import { dateKey, distanceScale, summarizeTraining } from "./training.js";
-import { projectMapRoutes, mountBackgroundMap } from "./maps.js";
-import { buildRunHeatmap, renderRunHeatmap } from "./heatmap.js";
+import { projectMapRoutes, mountBackgroundMap, getMapViewport, updateMapOverlay } from "./maps.js";
+import { buildRunHeatmap, renderRunHeatmap, groupHeatmapRoutes } from "./heatmap.js";
 
 const dashboard = document.querySelector("#dashboard");
 const dashboardNav = document.querySelector("#dashboard-nav");
@@ -1322,26 +1323,107 @@ function renderSummary() {
     : `${dashboardPeriod.selectedOptions[0].textContent} · All activity types`;
 }
 
+const heatmapTypeMenu = document.querySelector("#heatmap-type-menu");
+const heatmapTypeChoices = document.querySelector("#heatmap-type-choices");
+const heatmapTypeLabel = document.querySelector("#heatmap-type-label");
+let heatmapTypeSelection = new Set();
+let heatmapSelectionTouched = false;
+let heatmapGroups = new Map();
+
+function updateHeatmapTypeChoices(rebuild) {
+  const types = [...heatmapGroups.keys()].sort();
+  heatmapTypeSelection = heatmapSelectionTouched
+    ? normalizeHeatmapSelection(heatmapTypeSelection, types) : defaultHeatmapSelection(types);
+  if (rebuild) {
+    const countTypes = members => members.reduce((sum, type) => sum + heatmapGroups.get(type).length, 0);
+    const shortcuts = [['all', 'All', countTypes(types)],
+      ...HEATMAP_TYPE_GROUPS.map(group => [group.id, group.label, countTypes(heatmapGroupTypes(group.id, types))])];
+    const individual = types.map(type => [type, type.replace(/\b[a-z]/g, character => character.toUpperCase()), heatmapGroups.get(type).length]);
+    const renderOptions = options => options.map(([type, label, count]) =>
+      `<label class="heatmap-type-option"><input type="checkbox" value="${escapeHtml(type)}" aria-controls="run-heatmap"${count ? '' : ' disabled'}><span>${escapeHtml(label)} (${count})</span></label>`).join('');
+    heatmapTypeChoices.innerHTML = `<div class="heatmap-type-shortcuts" role="group" aria-label="Activity groups">${renderOptions(shortcuts)}</div>
+      <div class="heatmap-type-individual" role="group" aria-labelledby="heatmap-individual-label"><p id="heatmap-individual-label">Individual types</p>${renderOptions(individual)}</div>`;
+  }
+  for (const input of heatmapTypeChoices.querySelectorAll('input')) {
+    const state = heatmapOptionState(heatmapTypeSelection, types, input.value);
+    input.checked = state.checked;
+    input.indeterminate = state.indeterminate;
+  }
+  const count = selectedHeatmapRoutes(heatmapGroups, heatmapTypeSelection).length;
+  const exactGroup = HEATMAP_TYPE_GROUPS.find(group => {
+    const members = heatmapGroupTypes(group.id, types);
+    return members.length > 0 && members.length === heatmapTypeSelection.size && members.every(type => heatmapTypeSelection.has(type));
+  });
+  heatmapTypeLabel.textContent = !heatmapSelectionTouched ? `Running / Trail (${count})`
+    : heatmapTypeSelection.has('all') ? `All (${count})`
+    : exactGroup ? `${exactGroup.label} (${count})`
+    : heatmapTypeSelection.size ? `${heatmapTypeSelection.size} selected (${count})` : 'None (0)';
+}
+let heatmapRoutes = [];
 let heatmapRoutesSnapshot;
-let heatmapRunsSnapshot;
+let heatmapActivitiesSnapshot;
+let heatmapTypeSnapshot;
+
+function updateHeatmapSummary(model, visibleArea = false) {
+  document.querySelector("#run-heatmap-legend").hidden = model.maxCount <= 1;
+  document.querySelector("#run-heatmap-summary").textContent = model.routeCount
+    ? `${model.routeCount} ${model.routeCount === 1 ? "activity" : "activities"} ${visibleArea ? "in this area" : "with GPS routes"} · Most visited area: ${model.maxCount} ${model.maxCount === 1 ? "activity" : "activities"}`
+    : heatmapTypeSelection.size === 0 ? "Select activity types to show their routes."
+      : visibleArea ? "No matching activity routes in this area" : "No GPS routes imported";
+}
 
 function renderHeatmap() {
   const routesSnapshot = importedRoutes.slice();
-  if (heatmapRunsSnapshot === importedRuns && heatmapRoutesSnapshot
+  const sameData = heatmapActivitiesSnapshot === importedActivities && heatmapRoutesSnapshot
     && routesSnapshot.length === heatmapRoutesSnapshot.length
-    && routesSnapshot.every((route, index) => route === heatmapRoutesSnapshot[index])) return;
-  heatmapRunsSnapshot = importedRuns;
+    && routesSnapshot.every((route, index) => route === heatmapRoutesSnapshot[index]);
+  const selectionKey = JSON.stringify([...heatmapTypeSelection].sort());
+  if (sameData && heatmapTypeSnapshot === selectionKey) return;
+  if (!sameData) heatmapGroups = groupHeatmapRoutes(importedRoutes, importedActivities);
+  updateHeatmapTypeChoices(!sameData);
+  heatmapActivitiesSnapshot = importedActivities;
   heatmapRoutesSnapshot = routesSnapshot;
-  const routes = importedRoutes.filter(route => ["running", "trail"].includes(route.category)
-    && importedRuns.some(run => routeMatchesActivity(route, run, importedRuns)));
-  const model = buildRunHeatmap(routes);
-  mountBackgroundMap(document.querySelector("#run-heatmap"),
-    model.routeCount ? renderRunHeatmap(model) : "", model.bounds);
-  document.querySelector("#run-heatmap-empty").hidden = model.routeCount > 0;
-  document.querySelector("#run-heatmap-legend").hidden = model.maxCount <= 1;
-  document.querySelector("#run-heatmap-summary").textContent = model.routeCount
-    ? `${model.routeCount} ${model.routeCount === 1 ? "run" : "runs"} with GPS routes · Most visited area: ${model.maxCount} ${model.maxCount === 1 ? "run" : "runs"}`
-    : "No GPS routes imported";
+  heatmapTypeSnapshot = JSON.stringify([...heatmapTypeSelection].sort());
+  heatmapRoutes = selectedHeatmapRoutes(heatmapGroups, heatmapTypeSelection);
+  const element = document.querySelector("#run-heatmap");
+  // A new selection gets an overview of all its routes. Subsequent map moves
+  // recalculate the overlay in place through recalculateHeatmap.
+  const model = buildRunHeatmap(heatmapRoutes);
+  mountBackgroundMap(element, model.routeCount ? renderRunHeatmap(model) : "", model.bounds, {
+    onViewportChange: recalculateHeatmap,
+  });
+  const empty = document.querySelector("#run-heatmap-empty");
+  empty.hidden = heatmapRoutes.length > 0;
+  empty.textContent = heatmapGroups.size ? "Select activity types to show their routes."
+    : "Import a Garmin ZIP or GPX routes from the Import menu to see your activity routes.";
+  updateHeatmapSummary(model);
+}
+
+heatmapTypeChoices.addEventListener("change", event => {
+  const input = event.target.closest('input[type="checkbox"]');
+  if (!input) return;
+  heatmapSelectionTouched = true;
+  heatmapTypeSelection = toggleHeatmapType(heatmapTypeSelection, [...heatmapGroups.keys()], input.value, input.checked);
+  renderHeatmap();
+});
+heatmapTypeMenu.addEventListener("keydown", event => {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    heatmapTypeMenu.open = false;
+    heatmapTypeMenu.querySelector('summary').focus();
+  }
+});
+document.addEventListener('click', event => {
+  if (!heatmapTypeMenu.contains(event.target)) heatmapTypeMenu.open = false;
+});
+
+function recalculateHeatmap() {
+  const element = document.querySelector("#run-heatmap");
+  const viewport = getMapViewport(element);
+  if (!viewport) return;
+  const model = buildRunHeatmap(heatmapRoutes, viewport);
+  if (!updateMapOverlay(element, renderRunHeatmap(model), viewport.bounds)) return;
+  updateHeatmapSummary(model, true);
 }
 
 function refreshDashboard() {
