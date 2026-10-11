@@ -425,3 +425,29 @@ footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: s
 
 .weekday-group-row th, .weekday-group-row td { font-weight: 600; }
 .weekday-table .weekday-section-row th { padding-top: 18px; border-top: 1px solid var(--line); text-align: left; text-transform: uppercase; letter-spacing: .06em; font-size: 11px; }
+
+.sleep-chart { overflow-x: auto; margin-top: 20px; }
+.sleep-chart svg { display: block; height: 230px; max-width: none; }
+.sleep-chart text { fill: currentColor; font-size: 12px; }
+.sleep-average { color: #358a80; }
+.sleep-lowest { color: #a16bbc; }
+#sleep-view > * + * { margin-top: 24px; }
+.sleep-table { width: 100%; border-collapse: collapse; white-space: nowrap; font-size: 13px; }
+.sleep-table th, .sleep-table td { padding: 12px; text-align: right; border-bottom: 1px solid var(--line); }
+.sleep-table th:first-child { text-align: left; }
+.sleep-pagination { display: flex; justify-content: flex-end; align-items: center; gap: 16px; padding: 16px; font-size: 13px; }
+.sleep-pagination button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: inherit; cursor: pointer; }
+.sleep-pagination button:disabled { opacity: .4; cursor: default; }
+.sleep-tooltip { position: fixed; z-index: 50; width: max-content; max-width: calc(100vw - 16px); padding: 12px 14px; border: 1px solid #3b5064; border-radius: 8px; background: #1a2a39; color: var(--ink); box-shadow: 0 8px 24px #0005; font-size: 12px; line-height: 1.65; pointer-events: none; }
+.sleep-tooltip strong, .sleep-tooltip span { display: block; }
+.sleep-chart svg:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.sleep-tooltip-date { color: var(--muted); font-size: 12px; font-weight: 500; margin-bottom: 8px; }
+.sleep-tooltip-metric { display: flex; align-items: baseline; justify-content: space-between; gap: 18px; }
+.sleep-tooltip-metric > span { color: var(--muted); font-size: 11px; }
+.sleep-tooltip-value { font-size: 26px; font-weight: 700; line-height: 1.4; font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
+
+.chart-tooltip > strong:first-child { color: var(--muted); font-size: 12px; font-weight: 500; }
+.chart-tooltip > span:nth-child(2) { margin: 4px 0; font-size: 26px; font-weight: 700; line-height: 1.4; font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
+.chart-tooltip > span:nth-child(n+3) { color: var(--muted); font-size: 11px; }
+.chart-point-selected { stroke: var(--ink) !important; stroke-width: 2px !important; }

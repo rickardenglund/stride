@@ -1,3 +1,4 @@
+import { parseGarminSleep, mergeSleep } from './sleep.js';
 import { importGarminRoutes } from './garmin-routes.js';
 import { mergeActivities, runningActivities, normalizeActivityType } from './activities.js';
 import { readZipDirectory, readZipEntry } from './zip.js';
@@ -53,6 +54,13 @@ export async function importGarminExport(blob, onProgress = () => {}) {
     parents += result.parents;
   }
   if (!activities.length) throw new Error('No valid activities found in the Garmin export.');
+  let sleep = [];
+  const sleepEntries = directory.filter(entry => /(?:^|\/)[^/]*_sleepData\.json$/i.test(entry.name));
+  if (sleepEntries.reduce((sum, entry) => sum + entry.size, 0) > 128 * 1024 * 1024) throw new Error('Sleep data exceeds the 128 MB import limit.');
+  for (const [index, entry] of sleepEntries.entries()) {
+    onProgress({ message: `Reading sleep history (${index + 1}/${sleepEntries.length})…` });
+    sleep = mergeSleep(sleep, parseGarminSleep(JSON.parse(new TextDecoder().decode(await readZipEntry(blob, entry)))));
+  }
   const routeResult = await importGarminRoutes(blob, directory, activities, onProgress);
-  return { activities, runs: runningActivities(activities), skipped, parents, summaryFiles: entries.length, ...routeResult };
+  return { sleep, activities, runs: runningActivities(activities), skipped, parents, summaryFiles: entries.length, ...routeResult };
 }

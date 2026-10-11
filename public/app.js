@@ -1,3 +1,5 @@
+import { bindChartInspection } from "./chart-inspection.js";
+import { mergeSleep, renderSleep } from "./sleep.js";
 import { groupActivitiesByWeekday } from "./weekday.js";
 import { normalizeHeatmapSelection, toggleHeatmapType, selectedHeatmapRoutes, HEATMAP_TYPE_GROUPS, heatmapGroupTypes, heatmapOptionState, defaultHeatmapSelection } from "./heatmap-filter.js";
 import { loadImportedData, saveImportedData, clearImportedData } from "./storage.js";
@@ -87,6 +89,15 @@ zipImportButton.addEventListener("click", () => {
   csvInput.value = "";
   csvInput.accept = ".zip,application/zip";
   csvInput.click();
+});
+let importedSleep = [];
+let sleepPage = 0;
+const sleepView = document.querySelector("#sleep-view");
+sleepView.addEventListener("click", event => {
+  const button = event.target.closest("[data-sleep-page]");
+  if (!button || button.disabled) return;
+  sleepPage = Number(button.dataset.sleepPage);
+  renderSleep(sleepView, importedSleep, dashboardPeriod.value, sleepPage);
 });
 let importedRuns = [];
 let importedActivities = [];
@@ -293,14 +304,17 @@ function showChartTooltip(point, clientX, clientY) {
   const windowDays = Number(point.dataset.windowDays);
   chartTooltip.children[0].textContent = `${windowDays}-day rolling ${point.dataset.kind}`;
   chartTooltip.children[1].textContent = point.dataset.kind === "average"
-    ? `Average distance: ${point.dataset.average} km/day`
-    : `Total distance: ${point.dataset.distance} km`;
+    ? `${point.dataset.average} km/day`
+    : `${point.dataset.distance} km`;
   chartTooltip.children[2].textContent = `Window: ${point.dataset.window}`;
   chartTooltip.children[3].textContent = `Window length: ${windowDays} days`;
   positionChartTooltip(clientX, clientY);
 }
 
 function positionChartTooltip(clientX, clientY) {
+  // Tooltips for run profiles must live in the dialog's top layer.
+  const parent = runDetailDialog.open ? runDetailDialog : document.body;
+  if (chartTooltip.parentElement !== parent) parent.append(chartTooltip);
   chartTooltip.style.left = `${clientX}px`;
   chartTooltip.style.top = `${clientY - 12}px`;
   chartTooltip.classList.add("visible");
@@ -361,53 +375,14 @@ function refreshChartLatestButton(scrollContainer, button) {
   if (chartScroll) updateLatestButton(chartScroll, button);
 }
 
-chart.addEventListener("pointerover", (event) => {
-  const point = event.target.closest(".avg-point, .sum-point, .daily-bar");
-  if (point) showChartTooltip(point, event.clientX, event.clientY);
-});
-chart.addEventListener("pointermove", (event) => {
-  const point = event.target.closest(".avg-point, .sum-point, .daily-bar");
-  if (point) showChartTooltip(point, event.clientX, event.clientY);
-});
-chart.addEventListener("pointerout", (event) => {
-  if (event.target.closest(".avg-point, .sum-point, .daily-bar") && !event.relatedTarget?.closest?.(".avg-point, .sum-point, .daily-bar")) {
-    hideChartTooltip();
-  }
-});
-chart.addEventListener("focusin", (event) => {
-  const point = event.target.closest(".avg-point, .sum-point, .daily-bar");
-  if (point) {
-    const bounds = point.getBoundingClientRect();
-    showChartTooltip(point, bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
-  }
-});
-chart.addEventListener("focusout", (event) => {
-  if (event.target.closest(".avg-point, .sum-point, .daily-bar")) hideChartTooltip();
-});
 
-activityFrequencyChart.addEventListener("pointerover", (event) => {
-  const bar = event.target.closest(".frequency-bar");
-  if (bar) showFrequencyTooltip(bar, event.clientX, event.clientY);
+bindChartInspection(chart, ".avg-point, .sum-point, .daily-bar", showChartTooltip, hideChartTooltip);
+bindChartInspection(activityFrequencyChart, ".frequency-bar", showFrequencyTooltip, hideChartTooltip);
+document.addEventListener("pointerdown", event => {
+  if (![chart, activityFrequencyChart, runHeartRateChart, runElevationChart, runRouteChart].some(container => container.contains(event.target))) hideChartTooltip();
 });
-activityFrequencyChart.addEventListener("pointermove", (event) => {
-  const bar = event.target.closest(".frequency-bar");
-  if (bar) showFrequencyTooltip(bar, event.clientX, event.clientY);
-});
-activityFrequencyChart.addEventListener("pointerout", (event) => {
-  if (event.target.closest(".frequency-bar") && !event.relatedTarget?.closest?.(".frequency-bar")) {
-    hideChartTooltip();
-  }
-});
-activityFrequencyChart.addEventListener("focusin", (event) => {
-  const bar = event.target.closest(".frequency-bar");
-  if (bar) {
-    const bounds = bar.getBoundingClientRect();
-    showFrequencyTooltip(bar, bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
-  }
-});
-activityFrequencyChart.addEventListener("focusout", (event) => {
-  if (event.target.closest(".frequency-bar")) hideChartTooltip();
-});
+document.addEventListener("scroll", hideChartTooltip, { capture: true, passive: true });
+document.addEventListener("keydown", event => { if (event.key === "Escape") hideChartTooltip(); });
 
 function renderRuns(runs, days) {
   const totals = new Map();
@@ -740,6 +715,7 @@ function showRunDetails(run, updateUrl = false) {
   runRouteFilename.textContent = route
     ? `${route.fileName}${routeElevations.length ? ` · Elevation ${Math.round(Math.min(...routeElevations))}–${Math.round(Math.max(...routeElevations))} m` : ""}`
     : "";
+  hideChartTooltip();
   selectedHeartRatePoints = route?.points.filter((point) => Number.isFinite(point.heartRate)) || [];
   runHeartRateSection.hidden = selectedHeartRatePoints.length < 2;
   runHeartRateChart.innerHTML = selectedHeartRatePoints.length >= 2
@@ -932,7 +908,9 @@ function handleProfileHover(event, chartElement) {
   const chartX = ((event.clientX - bounds.left) / bounds.width) * 640;
   const progress = Math.max(0, Math.min(1, (chartX - 42) / 586));
   const totalPoints = (selectedRouteCoordinates.at(-1).index ?? selectedRouteCoordinates.length - 1) + 1;
-  updateRunHover(progress * Math.max(totalPoints - 1, 1));
+  const targetIndex = progress * Math.max(totalPoints - 1, 1);
+  updateRunHover(targetIndex);
+  showProfileTooltip(targetIndex, chartElement, event);
 }
 
 function handleRouteHover(event) {
@@ -947,6 +925,22 @@ function handleRouteHover(event) {
     return distance < closest.distance ? { point, distance } : closest;
   }, { point: selectedRouteCoordinates[0], distance: Infinity }).point;
   updateRunHover(closestPoint.index);
+  showProfileTooltip(closestPoint.index, runRouteChart, event);
+}
+
+function showProfileTooltip(targetIndex, chartElement, event) {
+  const isElevation = chartElement === runElevationChart;
+  const samples = isElevation || !selectedHeartRatePoints.length ? selectedElevationPoints : selectedHeartRatePoints;
+  if (!samples.length) return;
+  const point = samples.reduce((closest, candidate) =>
+    Math.abs(candidate.index - targetIndex) < Math.abs(closest.index - targetIndex) ? candidate : closest);
+  const key = isElevation || !selectedHeartRatePoints.length ? "elevation" : "heartRate";
+  const total = selectedRouteCoordinates.at(-1)?.index || 1;
+  chartTooltip.children[0].textContent = `${Math.round(point.index / total * 100)}% through activity`;
+  chartTooltip.children[1].textContent = `${point[key]} ${key === "elevation" ? "m" : "bpm"}`;
+  chartTooltip.children[2].textContent = key === "elevation" ? "Elevation" : "Heart rate";
+  chartTooltip.children[3].textContent = "Recorded sample";
+  positionChartTooltip(event.clientX, event.clientY);
 }
 
 for (const [chartElement, inspect] of [
@@ -964,6 +958,7 @@ for (const [chartElement, inspect] of [
 }
 
 function hideRunHover() {
+  hideChartTooltip();
   runRouteChart.querySelector(".run-route-hover-marker")?.setAttribute("visibility", "hidden");
   runHeartRateChart.querySelector(".heart-rate-hover-marker")?.setAttribute("visibility", "hidden");
   runHeartRateChart.querySelector(".heart-rate-hover-line")?.setAttribute("visibility", "hidden");
@@ -971,9 +966,12 @@ function hideRunHover() {
   runElevationChart.querySelector(".run-profile-hover-line")?.setAttribute("visibility", "hidden");
 }
 
-runHeartRateChart.addEventListener("pointerleave", hideRunHover);
-runElevationChart.addEventListener("pointerleave", hideRunHover);
-runRouteChart.addEventListener("pointerleave", hideRunHover);
+runHeartRateChart.addEventListener("pointerleave", event => { if (event.pointerType !== "touch") hideRunHover(); });
+runHeartRateChart.addEventListener("pointercancel", hideRunHover);
+runElevationChart.addEventListener("pointerleave", event => { if (event.pointerType !== "touch") hideRunHover(); });
+runElevationChart.addEventListener("pointercancel", hideRunHover);
+runRouteChart.addEventListener("pointerleave", event => { if (event.pointerType !== "touch") hideRunHover(); });
+runRouteChart.addEventListener("pointercancel", hideRunHover);
 
 function inferGpxCategory(text) {
   const normalized = text.toLowerCase();
@@ -1039,11 +1037,12 @@ async function persistImportedData() {
       runs: importedRuns,
       activities: importedActivities,
       routes: importedRoutes,
+      sleep: importedSleep,
       distanceUnit: "m",
     });
     return true;
   } catch {
-    showError("Your activities and routes are loaded, but this browser could not save them. They will be lost when you close this page.");
+    showError("Your imported data is loaded, but this browser could not save it. They will be lost when you close this page.");
     return false;
   }
 }
@@ -1127,6 +1126,7 @@ runDetailDialog.addEventListener("keydown", (event) => {
 });
 
 function closeRunDetails(updateUrl = true) {
+  hideChartTooltip();
   if (runDetailDialog.open && !runDetailDialog.classList.contains("is-closing")) {
     if (updateUrl) clearRunFromUrl();
     runDetailDialog.classList.add("is-closing");
@@ -1418,6 +1418,11 @@ function recalculateHeatmap() {
 }
 
 function refreshDashboard() {
+  if (dashboard.dataset.activeView === "sleep") {
+    renderSleep(sleepView, importedSleep, dashboardPeriod.value, sleepPage);
+    document.querySelector("#summary-period").textContent = "Sleep history · " + dashboardPeriod.selectedOptions[0].textContent;
+    return;
+  }
   if (importedRuns.length === 0) return;
   hideChartTooltip();
   renderRuns(importedRuns, dashboardPeriod.value);
@@ -1456,7 +1461,7 @@ function setImportedState() {
 
 async function unloadImportedData() {
   if (csvImportInProgress) return;
-  if (!window.confirm("Unload all imported activities and routes from this browser? The original files on your device will not be deleted.")) return;
+  if (!window.confirm("Unload all imported activities, routes and sleep history from this browser? The original files on your device will not be deleted.")) return;
   try {
     await clearImportedData();
   } catch {
@@ -1467,6 +1472,7 @@ async function unloadImportedData() {
   clearRunFromUrl();
   importedRuns = [];
   importedActivities = [];
+  importedSleep = [];
   importedFileName = "";
   importedRoutes = [];
   visibleRuns = [];
@@ -1511,8 +1517,10 @@ function setDashboardView(view, updateUrl = false) {
   if (activeView === "runs") refreshChartLatestButton(chart, runningLoadLatest);
   if (activeView === "weekday") refreshChartLatestButton(activityFrequencyChart, activityTimelineLatest);
   dashboard.dataset.activeView = activeView;
+  document.querySelector(".summary-grid").hidden = activeView === "sleep";
+  document.querySelector(".page-heading .eyebrow").textContent = activeView === "sleep" ? "Your wellbeing" : "Your training";
   document.querySelector("#view-title").textContent = {
-    calendar: "Training calendar", runs: "Your running", weekday: "Activity patterns",
+    calendar: "Training calendar", runs: "Your running", weekday: "Activity patterns", sleep: "Your sleep",
   }[activeView];
   dashboardPeriodControl.hidden = !importedRuns.length || activeView === "calendar";
   refreshDashboard();
@@ -1572,7 +1580,7 @@ async function importFile(file) {
     const result = isZip ? await readGarminZip(file)
       : parseGarminCsv(await file.text(), "km", { requireRuns: importedRuns.length === 0 });
     if (isZip) {
-      importProgressText.textContent = "Saving activities and routes…";
+      importProgressText.textContent = "Saving activities, routes and sleep…";
       cancelImportButton.disabled = true;
     }
     const { activities } = result;
@@ -1587,12 +1595,14 @@ async function importFile(file) {
     importedActivities = mergedActivities;
     importedFileName = file.name;
     importedRoutes = mergeRoutes(importedRoutes, result.routes || []);
+    importedSleep = mergeSleep(importedSleep, result.sleep || []);
+    sleepPage = 0;
     calendarMonth = null;
     const savedSuccessfully = await persistImportedData();
     setImportedState();
     refreshDashboard();
     if (isZip && savedSuccessfully) {
-      showNotice(`Imported Garmin history: ${added} added, ${activities.length - added} matched existing activities. ${result.routes.length} GPS routes imported. ${result.routeStats.failed} recordings could not be read; ${result.routeStats.unmatched} route recordings had no unique activity match. ${result.skipped} invalid records and ${result.parents} multisport parent records skipped.`, "success");
+      showNotice(`Imported Garmin history: ${added} added, ${activities.length - added} matched existing activities. ${result.routes.length} GPS routes and ${result.sleep.length} sleep nights imported. ${result.routeStats.failed} recordings could not be read; ${result.routeStats.unmatched} route recordings had no unique activity match. ${result.skipped} invalid records and ${result.parents} multisport parent records skipped.`, "success");
     }
   } catch (error) {
     if (error.name === "AbortError") showNotice("Import cancelled. Your saved activities are unchanged.", "success");
@@ -1646,6 +1656,7 @@ unloadDataButton.addEventListener("click", () => {
   unloadImportedData();
 });
 dashboardPeriod.addEventListener("change", () => {
+  sleepPage = 0;
   runsPage = 0;
   refreshDashboard();
 });
@@ -1744,6 +1755,7 @@ try {
         averageHeartRate: Number.isFinite(activity.averageHeartRate) ? activity.averageHeartRate : null,
       }))
       : importedRuns.map((run) => ({ ...run, type: run.type || "Running" }));
+    importedSleep = Array.isArray(saved.sleep) ? saved.sleep.filter(night => typeof night.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(night.date)) : [];
     importedFileName = saved.fileName || "";
     importedRoutes = Array.isArray(saved.routes) ? saved.routes.filter((route) =>
       typeof route.date === "string"
