@@ -123,19 +123,19 @@ test("prefers Garmin average pace over elapsed duration", () => {
   const result = parseGarminCsv(
     [
       "Activity Type,Date,Distance,Time,Avg Pace",
-      "Running,2026-10-08,3.45,00:22:37,6:33",
+      "Running,2024-02-03,4.00,00:28:00,6:45",
     ].join("\n"),
   );
-  assert.equal(result.runs[0].paceSecondsPerKm, 393);
+  assert.equal(result.runs[0].paceSecondsPerKm, 405);
 });
 
-test("parses the Garmin CSV row format from the user's export", () => {
+test("parses a synthetic activity in the Garmin CSV row format", () => {
   const result = parseGarminCsv([
     "Activity Type,Date,Favorite,Title,Distance,Calories,Time,Avg HR,Max HR,Aerobic TE,Avg Run Cadence,Max Run Cadence,Avg Pace,Best Pace",
-    'Running,2026-10-08 18:04:42,false,"Gothenburg Running","3.45","302","00:22:37","155","172","2.5","166","185","6:33","4:44"',
+    'Running,2024-02-03 08:15:00,false,"Sample running session","4.00","250","00:28:00","145","175","2.0","160","180","6:45","5:00"',
   ].join("\n"));
-  assert.equal(result.runs[0].distance, 3450);
-  assert.equal(result.runs[0].paceSecondsPerKm, 393);
+  assert.equal(result.runs[0].distance, 4000);
+  assert.equal(result.runs[0].paceSecondsPerKm, 405);
 });
 
 test("preserves Garmin activity IDs when present in the CSV", () => {
@@ -151,12 +151,12 @@ test("imports non-running duration and average heart rate for activity calendar"
   const result = parseGarminCsv([
     "Activity Type,Date,Distance,Time,Avg HR",
     "Running,2026-10-04,5,00:25:00,150",
-    "Yoga,2026-10-05,--,00:59:17,112",
+    "Yoga,2026-10-05,--,00:45:00,100",
     "Cycling,2026-10-06,12.5,00:40:00,138",
   ].join("\n"));
   assert.deepEqual(result.activities, [
     { date: "2026-10-04", type: "Running", distance: 5000, durationSeconds: 1500, paceSecondsPerKm: 300, averageHeartRate: 150 },
-    { date: "2026-10-05", type: "Yoga", distance: null, durationSeconds: 3557, paceSecondsPerKm: null, averageHeartRate: 112 },
+    { date: "2026-10-05", type: "Yoga", distance: null, durationSeconds: 2700, paceSecondsPerKm: null, averageHeartRate: 100 },
     { date: "2026-10-06", type: "Cycling", distance: 12500, durationSeconds: 2400, paceSecondsPerKm: 192, averageHeartRate: 138 },
   ]);
 });

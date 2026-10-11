@@ -1,1 +1,5 @@
 node_modules/
+
+# Private Garmin exports and GPS samples
+garmin.zip
+example.gpx

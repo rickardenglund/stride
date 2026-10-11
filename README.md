@@ -54,3 +54,5 @@ The workflow publishes the `public/` directory. Each visitor imports their own G
 ## Development
 
 Run the CSV, ZIP, and FIT parsers, activity merge, maps, heatmap, and training summary tests with `npm test`.
+
+`example.csv` contains 900 fully synthetic activities for development and demos. Its dates, titles, activity mix, and metrics are generated independently of personal exports. Local `garmin.zip` and `example.gpx` files are ignored by Git.
