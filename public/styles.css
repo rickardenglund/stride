@@ -82,8 +82,10 @@ main { flex: 1; min-width: 0; }
 .heatmap-heading::-webkit-details-marker { display: none; }
 .heatmap-chevron { width: 20px; height: 20px; flex-shrink: 0; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .heatmap-card:not([open]) .heatmap-chevron { transform: rotate(-90deg); }
+/* Bound the map itself; zoomed/transformed Leaflet layers must not escape it. */
+.run-heatmap, .run-route-chart { position: relative; width: 100%; min-width: 0; max-width: 100%; contain: paint; }
 .run-heatmap { margin-top: 20px; overflow: hidden; border-radius: 8px; background: var(--paper); }
-.run-heatmap svg { display: block; width: 100%; height: auto; }
+.run-heatmap:not(.leaflet-container) > svg { display: block; width: 100%; height: auto; }
 .run-heatmap:not(:empty) { aspect-ratio: 2 / 1; min-height: 240px; }
 .run-route-chart { aspect-ratio: 640 / 250; min-height: 200px; }
 .run-heatmap.leaflet-container, .run-route-chart.leaflet-container { background: var(--paper); isolation: isolate; }
@@ -279,7 +281,7 @@ footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: s
 .run-route-section { margin-top: 20px; }
 .run-route-section h3 { margin-bottom: 9px; font: 700 13px Manrope, sans-serif; }
 .run-route-chart { overflow: hidden; border-radius: 6px; background: var(--paper); }
-.run-route-chart svg { display: block; width: 100%; height: auto; }
+.run-route-chart:not(.leaflet-container) > svg { display: block; width: 100%; height: auto; }
 .run-route-chart polyline { fill: none; stroke: #f87171; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 .run-route-chart .run-route-start { fill: #58c27d; stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
 .run-route-chart .run-route-end { fill: var(--accent); stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
@@ -472,3 +474,11 @@ footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: s
 .weekday-bar:focus-visible { outline: none; stroke: var(--ink); stroke-width: 2px; }
 .weekday-bar-baseline { stroke: var(--line); }
 .weekday-card .runs-heading { flex-wrap: wrap; gap: 16px; }
+
+.map-fullscreen-button { position: absolute; top: 10px; right: 10px; z-index: 1000; margin: 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: 600 12px "DM Sans", sans-serif; box-shadow: 0 1px 5px #0005; }
+.run-heatmap:fullscreen, .run-route-chart:fullscreen,
+.map-fullscreen-dialog > .run-heatmap, .map-fullscreen-dialog > .run-route-chart { width: 100%; height: 100%; max-width: none; max-height: none; min-height: 0; aspect-ratio: auto; margin: 0; border-radius: 0; }
+.map-fullscreen-dialog { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; max-width: none; max-height: none; padding: 0; margin: 0; border: 0; overflow: hidden; background: var(--paper); color: var(--ink); }
+.map-fullscreen-controls { position: absolute; top: 52px; right: 10px; z-index: 1100; margin: 0; max-width: calc(100% - 20px); }
+.map-fullscreen-controls .action-button { background: var(--surface); }
+.map-fullscreen-controls .heatmap-type-options { max-height: min(350px, calc(100dvh - 130px)); }

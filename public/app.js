@@ -325,7 +325,8 @@ function showChartTooltip(point, clientX, clientY) {
 
 function positionChartTooltip(clientX, clientY) {
   // Tooltips for run profiles must live in the dialog's top layer.
-  const parent = runDetailDialog.open ? runDetailDialog : document.body;
+  const parent = document.fullscreenElement || runRouteChart.closest(".map-fullscreen-dialog")
+    || (runDetailDialog.open ? runDetailDialog : document.body);
   if (chartTooltip.parentElement !== parent) parent.append(chartTooltip);
   chartTooltip.style.left = `${clientX}px`;
   chartTooltip.style.top = `${clientY - 12}px`;
@@ -944,6 +945,7 @@ function handleProfileHover(event, chartElement) {
 }
 
 function handleRouteHover(event) {
+  if (event.buttons || event.target.closest?.('.leaflet-control')) { hideRunHover(); return; }
   const svg = runRouteChart.querySelector("svg");
   if (!svg || (selectedHeartRatePoints.length < 2 && selectedElevationPoints.length < 2)) return;
   const bounds = svg.getBoundingClientRect();
@@ -1002,6 +1004,8 @@ runElevationChart.addEventListener("pointerleave", event => { if (event.pointerT
 runElevationChart.addEventListener("pointercancel", hideRunHover);
 runRouteChart.addEventListener("pointerleave", event => { if (event.pointerType !== "touch") hideRunHover(); });
 runRouteChart.addEventListener("pointercancel", hideRunHover);
+runRouteChart.addEventListener("pointerdown", hideRunHover);
+runRouteChart.addEventListener("wheel", hideRunHover, { passive: true });
 
 function inferGpxCategory(text) {
   const normalized = text.toLowerCase();
@@ -1344,6 +1348,21 @@ function renderSummary() {
     : `${dashboardPeriod.selectedOptions[0].textContent} · All activity types`;
 }
 
+const heatmapCard = document.querySelector(".heatmap-card");
+const heatmapExpandedKey = "stride-heatmap-expanded";
+try {
+  heatmapCard.open = localStorage.getItem(heatmapExpandedKey) === "true";
+} catch {
+  // Keep the default when browser storage is unavailable.
+}
+heatmapCard.addEventListener("toggle", () => {
+  try {
+    localStorage.setItem(heatmapExpandedKey, String(heatmapCard.open));
+  } catch {
+    // Expansion still works when preferences cannot be saved.
+  }
+});
+
 const heatmapTypeMenu = document.querySelector("#heatmap-type-menu");
 const heatmapTypeChoices = document.querySelector("#heatmap-type-choices");
 const heatmapTypeLabel = document.querySelector("#heatmap-type-label");
@@ -1359,7 +1378,7 @@ function updateHeatmapTypeChoices(rebuild) {
     const countTypes = members => members.reduce((sum, type) => sum + heatmapGroups.get(type).length, 0);
     const byCount = (left, right) => right[2] - left[2] || left[1].localeCompare(right[1]);
     const shortcuts = [['all', 'All', countTypes(types)],
-      ...HEATMAP_TYPE_GROUPS.map(group => [group.id, group.label, countTypes(heatmapGroupTypes(group.id, types))]).sort(byCount)];
+      ...HEATMAP_TYPE_GROUPS.map(group => [group.id, group.label, countTypes(heatmapGroupTypes(group.id, types))]).filter(([, , count]) => count >= 1).sort(byCount)];
     const individual = types.map(type => [type, type.replace(/\b[a-z]/g, character => character.toUpperCase()), heatmapGroups.get(type).length]).sort(byCount);
     const renderOptions = options => options.map(([type, label, count]) =>
       `<label class="heatmap-type-option"><input type="checkbox" value="${escapeHtml(type)}" aria-controls="run-heatmap"${count ? '' : ' disabled'}><span>${escapeHtml(label)} (${count})</span></label>`).join('');
@@ -1413,6 +1432,7 @@ function renderHeatmap() {
   const model = buildRunHeatmap(heatmapRoutes);
   mountBackgroundMap(element, model.routeCount ? renderRunHeatmap(model) : "", model.bounds, {
     onViewportChange: recalculateHeatmap,
+    fullscreenControls: document.querySelector(".heatmap-controls"),
   });
   const empty = document.querySelector("#run-heatmap-empty");
   empty.hidden = heatmapRoutes.length > 0;

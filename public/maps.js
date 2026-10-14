@@ -1,3 +1,5 @@
+import { addMapFullscreen } from './map-fullscreen.js';
+
 const MAX_LATITUDE = 85.05112878;
 export function mercatorLatitude(latitude) {
   const radians = Math.max(-MAX_LATITUDE, Math.min(MAX_LATITUDE, latitude)) * Math.PI / 180;
@@ -30,11 +32,20 @@ export function projectMapRoutes(routes, width, height, padding = 20) {
 }
 
 const maps = new WeakMap();
-export function mountBackgroundMap(element, markup, bounds, { onViewportChange } = {}) {
+export function mountBackgroundMap(element, markup, bounds, { onViewportChange, fullscreenControls } = {}) {
   const previous = maps.get(element);
   clearTimeout(previous?.viewportTimer);
+  // Selection changes replace the heat layer without removing a fullscreen map.
+  if (previous?.fullscreen?.isActive()) {
+    if (markup && bounds) updateMapOverlay(element, markup, bounds);
+    else { previous.overlay?.remove(); previous.overlay = null; }
+    if (bounds) previous.map.fitBounds(bounds, { animate: false, maxZoom: 17 });
+    previous.scheduleViewportUpdate();
+    return;
+  }
   previous?.observer?.disconnect();
   previous?.visibility?.disconnect();
+  previous?.fullscreen?.destroy();
   previous?.map?.remove();
   maps.delete(element);
   element.innerHTML = markup;
@@ -49,20 +60,28 @@ export function mountBackgroundMap(element, markup, bounds, { onViewportChange }
       if (maps.get(element) === state && element.clientWidth && element.clientHeight) onViewportChange();
     }, 150);
   };
+  state.scheduleViewportUpdate = scheduleViewportUpdate;
   const update = () => {
     if (!element.clientWidth || !element.clientHeight) return;
     if (!state.map) {
       const svg = element.querySelector('svg');
       element.innerHTML = '';
-      state.map = L.map(element, { scrollWheelZoom: false, zoomAnimation: false,
-        fadeAnimation: false, markerZoomAnimation: false, attributionControl: true });
+      const reducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+      state.map = L.map(element, {
+        scrollWheelZoom: false, wheelPxPerZoomLevel: 120, wheelDebounceTime: 40,
+        zoomSnap: .25, zoomDelta: .5,
+        zoomAnimation: !reducedMotion, fadeAnimation: !reducedMotion,
+        markerZoomAnimation: !reducedMotion, inertia: !reducedMotion,
+        attributionControl: true,
+      });
       state.map.attributionControl.setPrefix(false);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19, keepBuffer: 0, referrerPolicy: 'strict-origin-when-cross-origin',
+        maxZoom: 19, keepBuffer: 2, referrerPolicy: 'strict-origin-when-cross-origin',
         attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
       }).addTo(state.map);
       state.overlay = L.svgOverlay(svg, bounds, { interactive: true, className: 'training-map-overlay' }).addTo(state.map);
       state.map.fitBounds(bounds, { animate: false, maxZoom: 17 });
+      if (element.ownerDocument) state.fullscreen = addMapFullscreen(element, state.map, fullscreenControls);
       if (onViewportChange) {
         state.map.on('movestart zoomstart', cancelViewportUpdate);
         state.map.on('moveend zoomend', scheduleViewportUpdate);

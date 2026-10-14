@@ -94,3 +94,31 @@ test('automatic recalculation coalesces map events and cancels pending work on r
     flush(); assert.equal(recalculations, 3);
   } finally { Object.assign(globalThis, previous); }
 });
+
+test('embedded maps disable wheel zoom and retain reduced-motion preferences', () => {
+  const previous = { L: globalThis.L, ResizeObserver: globalThis.ResizeObserver, matchMedia: globalThis.matchMedia };
+  let resize, options, tileOptions, reducedMotion = false;
+  const map = { attributionControl: { setPrefix() {} }, fitBounds() {}, remove() {} };
+  globalThis.ResizeObserver = class { constructor(callback) { resize = callback; } observe() {} disconnect() {} };
+  globalThis.matchMedia = () => ({ matches: reducedMotion });
+  globalThis.L = {
+    map(element, config) { options = config; return map; },
+    tileLayer(url, config) { tileOptions = config; return { addTo() {} }; },
+    svgOverlay: () => ({ addTo() {} }),
+  };
+  const element = { innerHTML: '', clientWidth: 600, clientHeight: 300, querySelector: () => ({}) };
+  try {
+    mountBackgroundMap(element, '<svg/>', [[59,18],[60,19]]); resize();
+    assert.equal(options.scrollWheelZoom, false);
+    assert.ok(options.zoomSnap < 1 && options.zoomDelta < 1);
+    assert.ok(options.wheelPxPerZoomLevel > 60);
+    assert.equal(options.zoomAnimation, true);
+    assert.ok(tileOptions.keepBuffer > 0);
+    reducedMotion = true;
+    mountBackgroundMap(element, '<svg/>', [[59,18],[60,19]]); resize();
+    assert.equal(options.zoomAnimation, false);
+    assert.equal(options.fadeAnimation, false);
+    assert.equal(options.inertia, false);
+    assert.equal(options.scrollWheelZoom, false);
+  } finally { Object.assign(globalThis, previous); }
+});
